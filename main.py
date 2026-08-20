@@ -8,7 +8,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from config import BOT_TOKEN, PROXY
+from config import BOT_TOKEN, DB_CONFIG, PROXY
 from database import init_db
 from handlers.start import router as start_router
 from keyboards.inline import router as inline_router
@@ -33,17 +33,25 @@ async def main():
     dp.include_router(start_router)
     dp.include_router(inline_router)
 
-    pool = await asyncpg.create_pool(
-        user=DB_CONFIG["user"],
-        password=DB_CONFIG["password"],
-        database=DB_CONFIG["database"],
-        host=DB_CONFIG["host"],
-        port=DB_CONFIG.get("port", 5432),
-        min_size=5,
-        max_size=20,
-    )
 
-    await init_db(pool)
+    try:
+        pool = await asyncpg.create_pool(
+            user=DB_CONFIG["user"],
+            password=DB_CONFIG["password"],
+            database=DB_CONFIG["database"],
+            host=DB_CONFIG["host"],
+            port=DB_CONFIG.get("port", 5432),
+            min_size=5,
+            max_size=20,
+        )
+    except Exception as e:
+        logger.critical(f"Failed to connect to DB: {e}")
+        return
+
+    try:
+        await init_db(pool)
+    except Exception as e:
+        logger.error(f"Error with initializing db: {e}")
 
     logger.info("Pool connections with DB was successfully created")
 
