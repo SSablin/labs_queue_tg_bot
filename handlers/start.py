@@ -6,8 +6,9 @@ from aiogram.fsm.context import FSMContext
 
 from database.db import upsert_user
 from database.session_manager import get_user
-from keyboards.inline import user_db_keyboard
+from keyboards.inline import cancel_keyboard, user_db_keyboard
 from states.start import Start
+from utils.fsm import clear_fsm_logic
 
 router = Router()
 
@@ -39,7 +40,25 @@ async def cmd_start(
         await message.answer(f"Hello, {input_name}!", reply_markup=keyboard)
     else:
         await state.set_state(Start.waiting_for_auth)
-        await message.answer("What is your name?")
+        keyboard = await cancel_keyboard()
+        await message.answer("What is your name?", reply_markup=keyboard)
+
+
+@router.message(Command("cancel"))
+@router.message(F.text.casefold() == "cancel")
+async def cancel_handler(message: types.Message, state: FSMContext) -> None:
+    """
+    Allow user to cancel any action
+    """
+    was_active = await clear_fsm_logic(state)
+
+    if was_active:
+        await message.answer(
+            "Cancelled.",
+            reply_markup=types.ReplyKeyboardRemove(),
+        )
+    else:
+        await message.answer("You are not filling now.")
 
 
 @router.message(Start.waiting_for_auth)
@@ -87,26 +106,6 @@ async def input_name(
             f"User {message.from_user.id} succesfully added to db, name: {input_name}"
         )
 
-    await message.answer(
-        msg, reply_markup=keyboard
-    )
+    await message.answer(msg, reply_markup=keyboard)
 
     await state.clear()
-
-
-@router.message(Command("cancel"))
-@router.message(F.text == "cancel")
-async def cancel_handler(message: types.Message, state: FSMContext) -> None:
-    """
-    Allow user to cancel any action
-    """
-    current_state = await state.get_state()
-    if current_state is None:
-        return
-
-    logger.info("Cancelling state %r", current_state)
-    await state.clear()
-    await message.answer(
-        "Cancelled.",
-        reply_markup=types.ReplyKeyboardRemove(),
-    )
