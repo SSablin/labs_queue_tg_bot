@@ -11,6 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN, DB_CONFIG, PROXY
 from database import init_db
 from handlers.start import router as start_router
+from handlers.sheet import router as sheet_router
 from keyboards.inline import router as inline_router
 
 
@@ -31,6 +32,7 @@ async def main():
 
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(start_router)
+    dp.include_router(sheet_router)
     dp.include_router(inline_router)
 
 
