@@ -12,11 +12,11 @@ from aiogram.types import (
     RichTextBold,
 )
 
-from database.session_manager import get_user
 from keyboards.inline import cancel_keyboard, records_keyboard
 from services import sheet_service
 from states.sheet import Add, Cheat
 from utils.fsm import clear_fsm_logic
+from utils.input import input_name_from_db
 
 router = Router()
 
@@ -92,24 +92,8 @@ async def cmd_add(
 ) -> None:
     # TODO: add gitlab format input, add button
 
-    pool = dispatcher["pool"]
-    if pool is None:
-        logger.error("DB error")
-        await message.answer("Error: no connection with DB")
-        return
-
-    if not message.from_user:
-        await message.answer("Failed to get user_id")
-        return
-
-    try:
-        input_name = await get_user(
-            pool,
-            message.from_user.id,
-        )
-    except Exception as e:
-        logger.error(f"UPSERT error: {e}")
-        await message.answer("Connection error")
+    input_name = await input_name_from_db(message, dispatcher)
+    if not input_name:
         return
 
     await state.update_data(input_name=input_name)
@@ -153,7 +137,9 @@ async def input_date(message: types.Message, state: FSMContext) -> None:
 
     pattern = r"^(0?[1-9]|[12][0-9]|3[01])\.(0?[1-9]|1[0-2])(\.\d{4}|\.\d{2})?$"
     if not re.fullmatch(pattern, input_date):
-        await message.answer("Date is incorrect. Send date in format: [D]D.[M]M[.YYYY]")
+        await message.answer(
+            "Date is incorrect. Send date in format: [D]D.[M]M[.[YY]YY]"
+        )
         return
 
     await state.update_data(date=input_date)
@@ -171,9 +157,9 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
         await message.answer("Time can not be empty. Try again")
         return
 
-    pattern = r"^(0?\d|1\d|2[0-3]):[0-5]\d(:[0-5]\d)?$"
+    pattern = r"^(0?\d|1\d|2[0-3]):[0-5]?\d(:[0-5]\d)?$"
     if not re.fullmatch(pattern, input_time):
-        await message.answer("Time is incorrect. Send time in format: [H]H:MM[:SS]")
+        await message.answer("Time is incorrect. Send time in format: [H]H:[M]M[:SS]")
         return
 
     data = await state.get_data()
@@ -181,7 +167,7 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
     lab = data.get("lab")
     date = data.get("date")
 
-    record = (input_name, date, input_time, lab, "no")
+    record = [input_name, date, input_time, lab, "no"]
 
     try:
         await asyncio.to_thread(sheet_service.add_record, 0, record)
@@ -202,30 +188,11 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
 
 
 @router.message(Command("cheat"))
-async def add_cheat(message: types.Message, dispatcher: Dispatcher, state: FSMContext):
-    pool = dispatcher["pool"]
-    if pool is None:
-        logger.error("DB error")
-        await message.answer("Error: no connection with DB")
-        return
-
-    if not message.from_user:
-        await message.answer("Failed to get user_id")
-        return
-
-    try:
-        input_name = await get_user(
-            pool,
-            message.from_user.id,
-        )
-    except Exception as e:
-        logger.error(f"UPSERT error: {e}")
-        await message.answer("Connection error")
-        return
-
+async def add_cheat(
+    message: types.Message, dispatcher: Dispatcher, state: FSMContext
+) -> None:
+    input_name = await input_name_from_db(message, dispatcher)
     if not input_name:
-        logger.error(f"No input_name in db for user_id: {message.from_user.id}")
-        await message.answer("No name in database. Did you authorize?")
         return
 
     await state.update_data(input_name=input_name)
@@ -287,29 +254,8 @@ async def cheat_input_cheat(message: types.Message, state: FSMContext) -> None:
 
 @router.message(Command("remove"))
 async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
-    pool = dispatcher["pool"]
-    if pool is None:
-        logger.error("DB error")
-        await message.answer("Error: no connection with DB")
-        return
-
-    if not message.from_user:
-        await message.answer("Failed to get user_id")
-        return
-
-    try:
-        input_name = await get_user(
-            pool,
-            message.from_user.id,
-        )
-    except Exception as e:
-        logger.error(f"UPSERT error: {e}")
-        await message.answer("Connection error")
-        return
-
+    input_name = await input_name_from_db(message, dispatcher)
     if not input_name:
-        logger.error(f"No input_name in db for user_id: {message.from_user.id}")
-        await message.answer("No name in database. Did you authorize?")
         return
 
     try:
@@ -376,14 +322,14 @@ async def cmd_missed(message: types.Message) -> None:
 
 
 @router.message(Command("sheet"))
-async def cmd_sheet(message: types.Message):
+async def cmd_sheet(message: types.Message) -> None:
     text = f'<a href="{sheet_service.SHEET_URL}">google_sheet</a>'
 
     await message.answer(text, parse_mode="HTML", link_preview_options=None)
 
 
 @router.message(Command("recover"))
-async def cmd_recover(message: types.Message):
+async def cmd_recover(message: types.Message) -> None:
     """
     return record status in "Was?" to "no"
     """
@@ -406,33 +352,12 @@ async def cmd_recover(message: types.Message):
 
 
 @router.message(Command("rebirth"))
-async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher):
+async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
     """
     return your self record status in "Was?" to "no"
     """
-    pool = dispatcher["pool"]
-    if pool is None:
-        logger.error("DB error")
-        await message.answer("Error: no connection with DB")
-        return
-
-    if not message.from_user:
-        await message.answer("Failed to get user_id")
-        return
-
-    try:
-        input_name = await get_user(
-            pool,
-            message.from_user.id,
-        )
-    except Exception as e:
-        logger.error(f"UPSERT error: {e}")
-        await message.answer("Connection error")
-        return
-
+    input_name = await input_name_from_db(message, dispatcher)
     if not input_name:
-        logger.error(f"No input_name in db for user_id: {message.from_user.id}")
-        await message.answer("No name in database. Did you authorize?")
         return
 
     try:

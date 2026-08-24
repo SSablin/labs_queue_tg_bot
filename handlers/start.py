@@ -5,10 +5,10 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from database.db import upsert_user
-from database.session_manager import get_user
 from keyboards.inline import cancel_keyboard, user_db_keyboard
 from states.start import Start
 from utils.fsm import clear_fsm_logic
+from utils.input import input_name_from_db
 
 router = Router()
 
@@ -19,20 +19,12 @@ logger = logging.getLogger(__name__)
 async def cmd_start(
     message: types.Message, state: FSMContext, dispatcher: Dispatcher
 ) -> None:
-    pool = dispatcher["pool"]
-    if pool is None:
-        await message.answer("Error: no connection with DB")
+    input_name = await input_name_from_db(message, dispatcher)
+    if not input_name:
         return
 
     if not message.from_user:
         await message.answer("Failed to get user_id")
-        return
-
-    try:
-        input_name = await get_user(pool, message.from_user.id)
-    except Exception as e:
-        logger.error(f"DB error: {e}")
-        await message.answer("Database error")
         return
 
     if input_name is not None:

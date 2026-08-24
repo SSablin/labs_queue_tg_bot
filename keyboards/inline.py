@@ -47,7 +47,7 @@ async def records_keyboard(
 
 
 @router.callback_query(F.data == "cancel_fsm")
-async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMContext):
+async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
     was_active = await clear_fsm_logic(state)
 
     if not callback.message:
@@ -66,7 +66,7 @@ async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data.startswith("user_id:"))
-async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMContext):
+async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await state.set_state(Start.waiting_for_auth)
 
@@ -83,7 +83,7 @@ async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMCont
 
 
 @router.callback_query(F.data.startswith("remove:"))
-async def remove_callback(callback: types.CallbackQuery):
+async def remove_callback(callback: types.CallbackQuery) -> None:
     await callback.answer()
 
     if not callback.message:
@@ -108,7 +108,7 @@ async def remove_callback(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("done:"))
-async def done_callback(callback: types.CallbackQuery):
+async def done_callback(callback: types.CallbackQuery) -> None:
     await callback.answer()
 
     if not callback.message:
@@ -137,7 +137,7 @@ async def done_callback(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("missed:"))
-async def missed_callback(callback: types.CallbackQuery):
+async def missed_callback(callback: types.CallbackQuery) -> None:
     await callback.answer()
 
     if not callback.message:
