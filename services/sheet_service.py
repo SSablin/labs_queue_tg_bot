@@ -101,7 +101,7 @@ def update_cell(
 
 def delete_record(worksheet_index: int, row_index: int) -> None:
     worksheet = spreadsheet.get_worksheet(worksheet_index)
-    worksheet.delete_rows(row_index)
+    worksheet.delete_rows(row_index + 1)
 
 
 def add_tip(worksheet_index: int, name: str, lab: int, tip: str) -> None:

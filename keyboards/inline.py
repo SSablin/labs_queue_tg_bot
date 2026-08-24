@@ -83,10 +83,34 @@ async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMCont
 
 
 @router.callback_query(F.data.startswith("remove:"))
+async def remove_callback(callback: types.CallbackQuery) -> None:
+    await callback.answer()
+
+    if not callback.message:
+        logger.error("No callback message")
+        return
+
+    if not callback.data:
+        logger.error("No callback data")
+        callback.message.answer("The button is invalid")
+        return
+
+    row_number = int(callback.data.split(":", 1)[1])
+    try:
+        await asyncio.to_thread(sheet_service.delete_record, 0, row_number)
+    except Exception as e:
+        logger.error(f"Sheet error: {e}")
+        await callback.message.answer("Error writing to the table.")
+        return
+
+    await callback.message.edit_text(f"Record №{row_number} was removed.")
+    await callback.answer("Removed")
+
+
 @router.callback_query(F.data.startswith("done:"))
 @router.callback_query(F.data.startswith("missed:"))
 @router.callback_query(F.data.startswith("no:"))
-async def active_callback(callback: types.CallbackQuery) -> None:
+async def action_callback(callback: types.CallbackQuery) -> None:
     await callback.answer()
 
     if not callback.message:
