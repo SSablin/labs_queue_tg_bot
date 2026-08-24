@@ -17,14 +17,14 @@ client = gspread.authorize(creds)
 spreadsheet = client.open_by_url(SHEET_URL)
 
 
-def get_queue(worksheet_index: int) -> list[list[str]]:
+def get_queue(worksheet_index: int, was: str | None = None) -> list[list[str]]:
     worksheet = spreadsheet.get_worksheet(worksheet_index)
     data = worksheet.get_all_records()
     headers = ["№", "Name", "Date", "Time", "Lab", "Was?"]
     rows = [headers]
 
     for i, row in enumerate(data):
-        if row["Was?"] == "no":
+        if was is None or row["Was?"] == was:
             rows.append(
                 [
                     str(i + 1),
@@ -40,15 +40,20 @@ def get_queue(worksheet_index: int) -> list[list[str]]:
 
 
 def get_queue_records(
-    worksheet_index: int, was: str | None = None, input_name: str | None = None
+    worksheet_index: int,
+    was: str | None = None,
+    was_not: str | None = None,
+    input_name: str | None = None,
 ) -> list[list[str]]:
     worksheet = spreadsheet.get_worksheet(worksheet_index)
     data = worksheet.get_all_records()
     rows = []
 
     for i, row in enumerate(data):
-        if (was is None or was != row["Was?"]) and (
-            input_name is None or input_name == row["Name"]
+        if (
+            (was is None or was == row["Was?"])
+            and (was_not is None or was_not != row["Was?"])
+            and (input_name is None or input_name == row["Name"])
         ):
             rows.append(
                 [str(i + 1), str(row["Name"]), str(row["Lab"]), str(row["Was?"])]

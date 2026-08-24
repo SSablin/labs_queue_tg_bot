@@ -26,14 +26,14 @@ logger = logging.getLogger(__name__)
 @router.message(Command("queue"))
 async def cmd_queue(message: types.Message) -> None:
     try:
-        await asyncio.to_thread(sheet_service.sort, 0)
+        await asyncio.to_thread(sheet_service.sort, worksheet_index=0)
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
         return
 
     try:
-        data = await asyncio.to_thread(sheet_service.get_queue, 0)
+        data = await asyncio.to_thread(sheet_service.get_queue, 0, "no")
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -157,9 +157,9 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
         await message.answer("Time can not be empty. Try again")
         return
 
-    pattern = r"^(0?\d|1\d|2[0-3]):[0-5]?\d(:[0-5]\d)?$"
+    pattern = r"^(0?\d|1\d|2[0-3]):[0-5]\d(:[0-5]\d)?$"
     if not re.fullmatch(pattern, input_time):
-        await message.answer("Time is incorrect. Send time in format: [H]H:[M]M[:SS]")
+        await message.answer("Time is incorrect. Send time in format: [H]H:MM[:SS]")
         return
 
     data = await state.get_data()
@@ -170,7 +170,9 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
     record = [input_name, date, input_time, lab, "no"]
 
     try:
-        await asyncio.to_thread(sheet_service.add_record, 0, record)
+        await asyncio.to_thread(
+            sheet_service.add_record, worksheet_index=0, record=record
+        )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -180,7 +182,7 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
     await state.clear()
 
     try:
-        await asyncio.to_thread(sheet_service.sort, 0)
+        await asyncio.to_thread(sheet_service.sort, worksheet_index=0)
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -242,7 +244,9 @@ async def cheat_input_cheat(message: types.Message, state: FSMContext) -> None:
     record = [input_name, lab, input_cheat]
 
     try:
-        await asyncio.to_thread(sheet_service.add_record, 2, record)
+        await asyncio.to_thread(
+            sheet_service.add_record, worksheet_index=2, record=record
+        )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -266,7 +270,9 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
         return
 
     try:
-        records = await asyncio.to_thread(sheet_service.find_records, 0, input_name)
+        records = await asyncio.to_thread(
+            sheet_service.find_records, worksheet_index=0, name=input_name
+        )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -291,7 +297,9 @@ async def cmd_done(message: types.Message) -> None:
         return
 
     try:
-        records = await asyncio.to_thread(sheet_service.get_queue_records, 0, "done")
+        records = await asyncio.to_thread(
+            sheet_service.get_queue_records, worksheet_index=0, was="no"
+        )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -311,7 +319,9 @@ async def cmd_missed(message: types.Message) -> None:
         return
 
     try:
-        records = await asyncio.to_thread(sheet_service.get_queue_records, 0, "missed")
+        records = await asyncio.to_thread(
+            sheet_service.get_queue_records, worksheet_index=0, was="no"
+        )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -341,7 +351,9 @@ async def cmd_recover(message: types.Message) -> None:
         return
 
     try:
-        records = await asyncio.to_thread(sheet_service.get_queue_records, 0, "no")
+        records = await asyncio.to_thread(
+            sheet_service.get_queue_records, worksheet_index=0, was_not="no"
+        )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await message.answer("Error writing to the table.")
@@ -369,7 +381,10 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
 
     try:
         records = await asyncio.to_thread(
-            sheet_service.get_queue_records, 0, "no", input_name
+            sheet_service.get_queue_records,
+            worksheet_index=0,
+            was_not="no",
+            input_name=input_name,
         )
     except Exception as e:
         logger.error(f"Sheet error: {e}")

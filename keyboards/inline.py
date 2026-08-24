@@ -83,61 +83,10 @@ async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMCont
 
 
 @router.callback_query(F.data.startswith("remove:"))
-async def remove_callback(callback: types.CallbackQuery) -> None:
-    await callback.answer()
-
-    if not callback.message:
-        logger.error("No callback message")
-        return
-
-    if not callback.data:
-        logger.error("No callback data")
-        callback.message.answer("The button is invalid")
-        return
-
-    row_number = int(callback.data.split(":", 1)[1])
-    try:
-        await asyncio.to_thread(sheet_service.delete_record, 0, row_number)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await callback.message.answer("Error writing to the table.")
-        return
-
-    await callback.message.edit_text("Record was removed.")
-    await callback.answer("Removed")
-
-
 @router.callback_query(F.data.startswith("done:"))
-async def done_callback(callback: types.CallbackQuery) -> None:
-    await callback.answer()
-
-    if not callback.message:
-        logger.error("No callback message")
-        return
-
-    if not callback.data:
-        logger.error("No callback data")
-        callback.message.answer("The button is invalid")
-        return
-
-    row_number = int(callback.data.split(":", 1)[1])
-    col_number = 5
-    value = "done"
-
-    try:
-        await asyncio.to_thread(
-            sheet_service.update_cell, 0, row_number, col_number, value
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await callback.message.answer("Error writing to the table.")
-        return
-
-    await callback.answer(f"Status was updated to <b>was</b> for row #{row_number}.")
-
-
 @router.callback_query(F.data.startswith("missed:"))
-async def missed_callback(callback: types.CallbackQuery) -> None:
+@router.callback_query(F.data.startswith("no:"))
+async def active_callback(callback: types.CallbackQuery) -> None:
     await callback.answer()
 
     if not callback.message:
@@ -149,9 +98,9 @@ async def missed_callback(callback: types.CallbackQuery) -> None:
         callback.message.answer("The button is invalid")
         return
 
+    value = callback.data.split(":", 1)[0]
     row_number = int(callback.data.split(":", 1)[1])
     col_number = 5
-    value = "missed"
 
     try:
         await asyncio.to_thread(
@@ -162,4 +111,8 @@ async def missed_callback(callback: types.CallbackQuery) -> None:
         await callback.message.answer("Error writing to the table.")
         return
 
-    await callback.answer(f"Status was updated to <b>missed</b> for row #{row_number}.")
+    try:
+        await callback.message.edit_text(text=f"Status was updated to <b>{value}</b> for row #{row_number}.", reply_markup=None)
+    except Exception as e:
+        logger.error(f"Failed to edit message: {e}")
+        await callback.message.answer("Form canceled.")
