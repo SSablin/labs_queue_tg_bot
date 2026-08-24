@@ -1,8 +1,10 @@
+import asyncio
 import logging
 
 from aiogram import F, Router, types
 from aiogram.fsm.context import FSMContext
 
+from services import sheet_service
 from states.start import Start
 from utils.fsm import clear_fsm_logic
 
@@ -22,6 +24,26 @@ async def user_db_keyboard(user_id: int) -> types.InlineKeyboardMarkup:
     )
 
     return types.InlineKeyboardMarkup(inline_keyboard=[[button]])
+
+
+async def records_keyboard(
+    records: list[list[str]], action: str
+) -> types.InlineKeyboardMarkup:
+    buttons = []
+    for cell in records:
+        label = f"№{cell[0]}: {cell[1]} (lab.{cell[2]}) (st.{cell[3]})"
+        try:
+            row_number = int(cell[0])
+        except Exception as e:
+            logger.error(f"Row number is not integer: {e}")
+            return
+
+        callback_data = f"{action}:{cell[0]}"
+        buttons.append(
+            [types.InlineKeyboardButton(text=label, callback_data=callback_data)]
+        )
+
+    return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @router.callback_query(F.data == "cancel_fsm")
@@ -44,14 +66,100 @@ async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data.startswith("user_id:"))
-async def user_id_callback(callback: types.CallbackQuery, state: FSMContext):
+async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(Start.waiting_for_auth)
 
     if not callback.message:
-        logger.error("no callback message")
+        logger.error("No callback message")
         return
 
+    await callback.message.edit_reply_markup(reply_markup=None)
+
     await state.update_data(is_name_change=True)
+
     keyboard = await cancel_keyboard()
     await callback.message.answer("Enter new name:", reply_markup=keyboard)
+
+
+@router.callback_query(F.data.startswith("remove:"))
+async def remove_callback(callback: types.CallbackQuery):
+    await callback.answer()
+
+    if not callback.message:
+        logger.error("No callback message")
+        return
+
+    if not callback.data:
+        logger.error("No callback data")
+        callback.message.answer("The button is invalid")
+        return
+
+    row_number = int(callback.data.split(":", 1)[1])
+    try:
+        await asyncio.to_thread(sheet_service.delete_record, 0, row_number)
+    except Exception as e:
+        logger.error(f"Sheet error: {e}")
+        await callback.message.answer("Error writing to the table.")
+        return
+
+    await callback.message.edit_text("Record was removed.")
+    await callback.answer("Removed")
+
+
+@router.callback_query(F.data.startswith("done:"))
+async def done_callback(callback: types.CallbackQuery):
+    await callback.answer()
+
+    if not callback.message:
+        logger.error("No callback message")
+        return
+
+    if not callback.data:
+        logger.error("No callback data")
+        callback.message.answer("The button is invalid")
+        return
+
+    row_number = int(callback.data.split(":", 1)[1])
+    col_number = 5
+    value = "done"
+
+    try:
+        await asyncio.to_thread(
+            sheet_service.update_cell, 0, row_number, col_number, value
+        )
+    except Exception as e:
+        logger.error(f"Sheet error: {e}")
+        await callback.message.answer("Error writing to the table.")
+        return
+
+    await callback.answer(f"Status was updated to <b>was</b> for row #{row_number}.")
+
+
+@router.callback_query(F.data.startswith("missed:"))
+async def missed_callback(callback: types.CallbackQuery):
+    await callback.answer()
+
+    if not callback.message:
+        logger.error("No callback message")
+        return
+
+    if not callback.data:
+        logger.error("No callback data")
+        callback.message.answer("The button is invalid")
+        return
+
+    row_number = int(callback.data.split(":", 1)[1])
+    col_number = 5
+    value = "missed"
+
+    try:
+        await asyncio.to_thread(
+            sheet_service.update_cell, 0, row_number, col_number, value
+        )
+    except Exception as e:
+        logger.error(f"Sheet error: {e}")
+        await callback.message.answer("Error writing to the table.")
+        return
+
+    await callback.answer(f"Status was updated to <b>missed</b> for row #{row_number}.")

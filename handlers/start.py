@@ -61,6 +61,15 @@ async def cancel_handler(message: types.Message, state: FSMContext) -> None:
         await message.answer("You are not filling now.")
 
 
+@router.message(Command("edit_profile"))
+async def cmd_edit_profile(message: types.Message, state: FSMContext):
+    await state.set_state(Start.waiting_for_auth)
+
+    await state.update_data(is_name_change=True)
+    keyboard = await cancel_keyboard()
+    await message.answer("Enter new name:", reply_markup=keyboard)
+
+
 @router.message(Start.waiting_for_auth)
 async def input_name(
     message: types.Message, state: FSMContext, dispatcher: Dispatcher
@@ -109,3 +118,24 @@ async def input_name(
     await message.answer(msg, reply_markup=keyboard)
 
     await state.clear()
+
+
+@router.message(Command("help"))
+async def cmd_help(message: types.Message):
+    text = """
+<b>Commands</b>
+/start
+/edit_profile
+/cancel
+/help
+/sheet
+/queue
+/add
+/cheat
+/remove
+/done
+/missed
+/recover
+/rebirth
+"""
+    await message.answer(text=text, parse_mode="HTML")
