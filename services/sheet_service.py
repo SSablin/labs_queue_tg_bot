@@ -1,8 +1,10 @@
+import uuid
+
 import gspread
 from google.oauth2.service_account import Credentials
 
 from config import CREDITS_PATH, SHEET_URL
-from constants.enums import QueueColumn
+from constants.enums import QueueColumn, WorksheetIndex
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -57,13 +59,21 @@ def get_queue_records(
             and (input_name is None or input_name == row["Name"])
         ):
             rows.append(
-                [str(i + 1), str(row["Name"]), str(row["Lab"]), str(row["Was?"])]
+                [
+                    str(i + 1),
+                    str(row["Name"]),
+                    str(row["Lab"]),
+                    str(row["Was?"]),
+                    str(row["record_id"]),
+                ]
             )
-
     return rows
 
 
-def add_record(worksheet_index: int, record: list[int | str]) -> None:
+def add_record(worksheet_index: int, record: list, add_uuid: bool = False) -> None:
+    if add_uuid:
+        record_id = str(uuid.uuid4())
+        record.append(record_id)
     worksheet = spreadsheet.get_worksheet(worksheet_index)
     worksheet.append_row(record, value_input_option="USER_ENTERED")
 
@@ -80,7 +90,13 @@ def find_records(
         if row["Name"] == name:
             if lab is None or row["Lab"] == str(lab):
                 rows.append(
-                    [str(i + 1), str(row["Name"]), str(row["Lab"]), str(row["Was?"])]
+                    [
+                        str(i + 1),
+                        str(row["Name"]),
+                        str(row["Lab"]),
+                        str(row["Was?"]),
+                        str(row["record_id"]),
+                    ]
                 )
 
     return rows
@@ -91,18 +107,6 @@ def update_record(
 ) -> None:
     worksheet = spreadsheet.get_worksheet(worksheet_index)
     worksheet.update(values=values, range_name=f"A{row_number}")
-
-
-def update_cell(
-    worksheet_index: int, row_number: int, col_number: int, value: int | str
-) -> None:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
-    worksheet.update_cell(row=row_number + 1, col=col_number, value=value)
-
-
-def delete_record(worksheet_index: int, row_index: int) -> None:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
-    worksheet.delete_rows(row_index + 1)
 
 
 def add_tip(worksheet_index: int, name: str, lab: int, tip: str) -> None:
@@ -119,3 +123,39 @@ def sort(worksheet_index: int) -> None:
         (QueueColumn.TIME, "asc"),
         range=f"A2:F{max(row_count, 2)}",
     )
+
+
+def _find_row_number_by_record_id(worksheet, record_id: str) -> int | None:
+    data = worksheet.get_all_records()
+    for i, row in enumerate(data):
+        if str(row.get("record_id")) == record_id:
+            return i + 2  # +2, because i – index (first row is header)
+    return None
+
+
+def delete_record_by_id(worksheet_index: int, record_id: str) -> bool:
+    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    row_number = _find_row_number_by_record_id(worksheet, record_id)
+    if row_number is None:
+        return False
+    worksheet.delete_rows(row_number)
+    return True
+
+
+def update_cell_by_id(
+    worksheet_index: int, record_id: str, col_number: int, value
+) -> bool:
+    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    row_number = _find_row_number_by_record_id(worksheet, record_id)
+    if row_number is None:
+        return False
+    worksheet.update_cell(row_number, col_number, value)
+    return True
+
+
+def fill_uuid_rows(worksheet_index: int) -> None:
+    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    data = worksheet.get_all_records()
+    for i, row in enumerate(data):
+        if not row.get("record_id"):
+            worksheet.update_cell(i + 2, QueueColumn.RECORD_ID, str(uuid.uuid4()))

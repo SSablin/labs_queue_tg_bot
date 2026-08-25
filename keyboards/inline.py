@@ -32,13 +32,13 @@ def records_keyboard(
 ) -> types.InlineKeyboardMarkup:
     buttons = []
     for cell in records:
+        # cell = [№, Name, Lab, Was?, record_id]
         label = f"№{cell[0]}: {cell[1]} (lab.{cell[2]}) (st.{cell[3]})"
-
-        data = f"{action}:{cell[0]}"
+        record_id = cell[4]  # UUID
+        data = f"{action}:{record_id}"
         if user_id is not None:
             data += f":{user_id}"
         buttons.append([types.InlineKeyboardButton(text=label, callback_data=data)])
-
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -85,11 +85,9 @@ async def user_id_callback_handler(
 @router.callback_query(F.data.startswith("remove:"))
 async def remove_callback(callback: types.CallbackQuery) -> None:
     await callback.answer()
-
     if not callback.message:
         logger.error("No callback message")
         return
-
     if not callback.data:
         logger.error("No callback data")
         await callback.message.answer("The button is invalid")
@@ -97,32 +95,35 @@ async def remove_callback(callback: types.CallbackQuery) -> None:
 
     parts = callback.data.split(":")
     if len(parts) == 3:
-        action, row_str, user_id_str = parts
-        if int(user_id_str) != callback.from_user.id:
+        action, record_id, user_id_str = parts
+        try:
+            callback_user_id = int(user_id_str)
+        except ValueError:
+            await callback.answer("Invalid button data.", show_alert=True)
+            return
+        if callback_user_id != callback.from_user.id:
             await callback.answer("You cannot do that.", show_alert=True)
             return
     else:
-        logger.error("Callback data is incorrect")
-        await callback.message.answer("The button is invalid")
-        return
-
-    try:
-        row_number = int(row_str)
-    except (ValueError, IndexError):
         await callback.answer("Invalid button data.", show_alert=True)
         return
 
+    # find row by UUID
     try:
-        await asyncio.to_thread(
-            sheet_service.delete_record, WorksheetIndex.QUEUE, row_number
+        deleted = await asyncio.to_thread(
+            sheet_service.delete_record_by_id, WorksheetIndex.QUEUE, record_id
         )
+        if not deleted:
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer("Record not found or already removed.")
+            return
     except Exception as e:
         logger.error(f"Sheet error: {e}")
-        await callback.message.answer("Error writing to the table.")
+        await callback.message.answer("Error deleting record.")
         return
 
     await callback.message.edit_text(
-        f"Record №{row_number} was removed.",
+        "Record removed.",
         reply_markup=None,
     )
     await callback.answer("Removed")
@@ -145,42 +146,45 @@ async def action_callback(callback: types.CallbackQuery) -> None:
 
     parts = callback.data.split(":")
     if len(parts) == 3:
-        action, row_str, user_id_str = parts
-        if int(user_id_str) != callback.from_user.id:
+        action, record_id, user_id_str = parts
+        try:
+            callback_user_id = int(user_id_str)
+        except ValueError:
+            await callback.answer("Invalid button data.", show_alert=True)
+            return
+        if callback_user_id != callback.from_user.id:
             await callback.answer("You cannot do that.", show_alert=True)
             return
     else:
-        logger.error("Callback data is incorrect")
-        await callback.message.answer("The button is invalid")
-        return
-
-    try:
-        row_number = int(row_str)
-    except (ValueError, IndexError):
         await callback.answer("Invalid button data.", show_alert=True)
         return
 
-    col_number = QueueColumn.WAS
-
     try:
-        await asyncio.to_thread(
-            sheet_service.update_cell,
+        updated = await asyncio.to_thread(
+            sheet_service.update_cell_by_id,
             WorksheetIndex.QUEUE,
-            row_number,
-            col_number,
+            record_id,
+            QueueColumn.WAS,
             action,
         )
+        if not updated:
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer("Record not found.")
+            return
     except Exception as e:
         logger.error(f"Sheet error: {e}")
-        await callback.message.answer("Error writing to the table.")
+        await callback.message.answer("Error updating record.")
         return
 
     try:
         await callback.message.edit_text(
-            text=f"Status was updated to <b>{action}</b> for row #{row_number}.",
+            f"Status was updated to <b>{action}</b>.",
             reply_markup=None,
             parse_mode="HTML",
         )
     except Exception as e:
-        logger.error(f"Failed to edit message: {e}")
-        await callback.message.answer("Form canceled.")
+        await callback.answer("Failed to edit the message")
+        await callback.message.answer(
+            f"Status was updated to <b>{action}</b>.",
+            parse_mode="HTML",
+        )

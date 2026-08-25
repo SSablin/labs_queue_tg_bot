@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from aiogram import Dispatcher, F, Router, types

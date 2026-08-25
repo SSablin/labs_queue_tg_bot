@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import re
 
@@ -26,9 +25,10 @@ logger = logging.getLogger(__name__)
 
 @router.message(Command("queue"))
 async def cmd_queue(message: types.Message) -> None:
-    if not await run_sheet_operation(
+    result = await run_sheet_operation(
         message, sheet_service.sort, worksheet_index=WorksheetIndex.QUEUE
-    ):
+    )
+    if result is None:
         return
 
     data = await run_sheet_operation(
@@ -141,20 +141,23 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
 
     record = [input_name, date, input_time, lab, "no"]
 
-    if not await run_sheet_operation(
+    result = await run_sheet_operation(
         message,
         sheet_service.add_record,
         worksheet_index=WorksheetIndex.QUEUE,
         record=record,
-    ):
+        add_uuid=True,
+    )
+    if result is None:
         return
 
     await message.answer(f"New record: date: {date}, time: {input_time}, lab: №{lab}")
     await state.clear()
 
-    if not await run_sheet_operation(
+    result = await run_sheet_operation(
         message, sheet_service.sort, worksheet_index=WorksheetIndex.QUEUE
-    ):
+    )
+    if result is None:
         return
 
 
@@ -205,12 +208,13 @@ async def cheat_input_cheat(message: types.Message, state: FSMContext) -> None:
 
     record = [input_name, lab, input_cheat]
 
-    if not await run_sheet_operation(
+    result = await run_sheet_operation(
         message,
         sheet_service.add_record,
         worksheet_index=WorksheetIndex.CHEATS,
         record=record,
-    ):
+    )
+    if result is None:
         return
 
     await message.answer("Your cheat was added")
@@ -223,7 +227,10 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
     if not input_name:
         return
 
-    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
+    result = await run_sheet_operation(
+        message, sheet_service.sort, WorksheetIndex.QUEUE
+    )
+    if result is None:
         return
 
     records = await run_sheet_operation(
@@ -242,47 +249,61 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
     await message.answer("Choose the record to remove:", reply_markup=keyboard)
 
 
-@router.message(Command("done"))
-async def cmd_done(message: types.Message) -> None:
-    # TODO: add input by message (1 2 3 make done the rows: 1, 2, 3)
-    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
+async def show_status_keyboard(message, action):
+    # action: "done", "missed", "recover"
+    result = await run_sheet_operation(
+        message, sheet_service.sort, WorksheetIndex.QUEUE
+    )
+    if result is None:
         return
 
-    records = await run_sheet_operation(
-        message,
-        sheet_service.get_queue_records,
-        worksheet_index=WorksheetIndex.QUEUE,
-        was="no",
-    )
+    if action in ("done", "missed"):
+        records = await run_sheet_operation(
+            message,
+            sheet_service.get_queue_records,
+            worksheet_index=WorksheetIndex.QUEUE,
+            was="no",
+        )
+        status_text = action
+    elif action == "recover":
+        records = await run_sheet_operation(
+            message,
+            sheet_service.get_queue_records,
+            worksheet_index=WorksheetIndex.QUEUE,
+            was_not="no",
+        )
+        status_text = "no"
+    else:
+        return
+
     if records is None:
         return
     if not records:
         await message.answer("No records found")
         return
 
-    keyboard = records_keyboard(records, "done", message.from_user.id)
-    await message.answer("Choose the record to make done:", reply_markup=keyboard)
+    keyboard = records_keyboard(records, status_text, message.from_user.id)
+    await message.answer(
+        f"Choose the record to make {status_text}:", reply_markup=keyboard
+    )
+
+
+@router.message(Command("done"))
+async def cmd_done(message: types.Message) -> None:
+    await show_status_keyboard(message, "done")
 
 
 @router.message(Command("missed"))
 async def cmd_missed(message: types.Message) -> None:
-    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
-        return
+    await show_status_keyboard(message, "missed")
 
-    records = await run_sheet_operation(
-        message,
-        sheet_service.get_queue_records,
-        worksheet_index=WorksheetIndex.QUEUE,
-        was="no",
-    )
-    if records is None:
-        return
-    if not records:
-        await message.answer("No records found")
-        return
 
-    keyboard = records_keyboard(records, "missed", message.from_user.id)
-    await message.answer("Choose the record to make missed:", reply_markup=keyboard)
+@router.message(Command("recover"))
+async def cmd_recover(message: types.Message) -> None:
+    """
+    return record status in "Was?" to "no"
+    """
+    await show_status_keyboard(message, "recover")
 
 
 @router.message(Command("sheet"))
@@ -295,40 +316,20 @@ async def cmd_sheet(message: types.Message) -> None:
     )
 
 
-@router.message(Command("recover"))
-async def cmd_recover(message: types.Message) -> None:
-    """
-    return record status in "Was?" to "no"
-    """
-    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
-        return
-
-    records = await run_sheet_operation(
-        message,
-        sheet_service.get_queue_records,
-        worksheet_index=WorksheetIndex.QUEUE,
-        was_not="no",
-    )
-    if records is None:
-        return
-    if not records:
-        await message.answer("No records found")
-        return
-
-    keyboard = records_keyboard(records, "no", message.from_user.id)
-    await message.answer("Choose the record to make no:", reply_markup=keyboard)
-
-
 @router.message(Command("rebirth"))
 async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
     """
     return your self record status in "Was?" to "no"
     """
+
     input_name = await input_name_from_db(message, dispatcher)
     if not input_name:
         return
 
-    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
+    result = await run_sheet_operation(
+        message, sheet_service.sort, WorksheetIndex.QUEUE
+    )
+    if result is None:
         return
 
     records = await run_sheet_operation(

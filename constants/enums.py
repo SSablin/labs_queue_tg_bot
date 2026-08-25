@@ -3,6 +3,7 @@ from enum import IntEnum
 
 class WorksheetIndex(IntEnum):
     QUEUE = 0
+    SORT = 1
     CHEATS = 2
 
 
