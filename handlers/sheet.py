@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 
-from aiogram import Dispatcher, F, Router, types
+from aiogram import Dispatcher, Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -12,11 +12,12 @@ from aiogram.types import (
     RichTextBold,
 )
 
+from constants.enums import WorksheetIndex
 from keyboards.inline import cancel_keyboard, records_keyboard
 from services import sheet_service
 from states.sheet import Add, Cheat
-from utils.fsm import clear_fsm_logic
-from utils.input import input_name_from_db
+from utils.input import input_name_from_db, parse_lab
+from utils.sheet import run_sheet_operation
 
 router = Router()
 
@@ -25,27 +26,23 @@ logger = logging.getLogger(__name__)
 
 @router.message(Command("queue"))
 async def cmd_queue(message: types.Message) -> None:
-    try:
-        await asyncio.to_thread(sheet_service.sort, worksheet_index=0)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(
+        message, sheet_service.sort, worksheet_index=WorksheetIndex.QUEUE
+    ):
         return
 
-    try:
-        data = await asyncio.to_thread(sheet_service.get_queue, 0, "no")
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    data = await run_sheet_operation(
+        message, sheet_service.get_queue, WorksheetIndex.QUEUE, "no"
+    )
+    if data is None:
         return
-
     if not data:
         await message.answer("Queue is empty")
         return
 
     table_grid = []
 
-    for i, item in enumerate(data):
+    for item in data:
         if not table_grid:
             row_cells = [
                 RichBlockTableCell(
@@ -65,25 +62,7 @@ async def cmd_queue(message: types.Message) -> None:
     )
 
     rich_message = InputRichMessage(blocks=[table_block])
-
     await message.answer_rich(rich_message=rich_message)
-
-
-@router.message(Command("cancel"))
-@router.message(F.text.casefold() == "cancel")
-async def cancel_handler(message: types.Message, state: FSMContext) -> None:
-    """
-    Allow user to cancel any action
-    """
-    was_active = await clear_fsm_logic(state)
-
-    if was_active:
-        await message.answer(
-            "Cancelled.",
-            reply_markup=types.ReplyKeyboardRemove(),
-        )
-    else:
-        await message.answer("You are not filling now.")
 
 
 @router.message(Command("add"))
@@ -100,20 +79,14 @@ async def cmd_add(
 
     await state.set_state(Add.waiting_for_lab)
 
-    keyboard = await cancel_keyboard()
+    keyboard = cancel_keyboard()
     await message.answer("Which lab?", reply_markup=keyboard)
 
 
 @router.message(Add.waiting_for_lab)
 async def input_lab(message: types.Message, state: FSMContext) -> None:
-    input_lab = message.text
-    if not input_lab:
-        await message.answer("Lab can not be empty. Try again.")
-        return
-    try:
-        lab = int(input_lab)
-    except Exception:
-        await message.answer("Lab must be integer. Try again.")
+    lab = await parse_lab(message)
+    if lab is None:
         return
 
     await state.update_data(lab=lab)
@@ -123,8 +96,7 @@ async def input_lab(message: types.Message, state: FSMContext) -> None:
         return
 
     await state.set_state(Add.waiting_for_date)
-
-    keyboard = await cancel_keyboard()
+    keyboard = cancel_keyboard()
     await message.answer("Which date?", reply_markup=keyboard)
 
 
@@ -146,7 +118,7 @@ async def input_date(message: types.Message, state: FSMContext) -> None:
 
     await state.set_state(Add.waiting_for_time)
 
-    keyboard = await cancel_keyboard()
+    keyboard = cancel_keyboard()
     await message.answer("Which time?", reply_markup=keyboard)
 
 
@@ -169,23 +141,20 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
 
     record = [input_name, date, input_time, lab, "no"]
 
-    try:
-        await asyncio.to_thread(
-            sheet_service.add_record, worksheet_index=0, record=record
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(
+        message,
+        sheet_service.add_record,
+        worksheet_index=WorksheetIndex.QUEUE,
+        record=record,
+    ):
         return
 
     await message.answer(f"New record: date: {date}, time: {input_time}, lab: №{lab}")
     await state.clear()
 
-    try:
-        await asyncio.to_thread(sheet_service.sort, worksheet_index=0)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(
+        message, sheet_service.sort, worksheet_index=WorksheetIndex.QUEUE
+    ):
         return
 
 
@@ -201,21 +170,14 @@ async def add_cheat(
 
     await state.set_state(Cheat.waiting_for_lab)
 
-    keyboard = await cancel_keyboard()
+    keyboard = cancel_keyboard()
     await message.answer("Which lab?", reply_markup=keyboard)
 
 
 @router.message(Cheat.waiting_for_lab)
 async def cheat_input_lab(message: types.Message, state: FSMContext) -> None:
-    # TODO: remove this function, make input_lab() universal
-    input_lab = message.text
-    if not input_lab:
-        await message.answer("Lab can not be empty. Try again.")
-        return
-    try:
-        lab = int(input_lab)
-    except Exception:
-        await message.answer("Lab must be integer. Try again.")
+    lab = await parse_lab(message)
+    if lab is None:
         return
 
     await state.update_data(lab=lab)
@@ -226,7 +188,7 @@ async def cheat_input_lab(message: types.Message, state: FSMContext) -> None:
 
     await state.set_state(Cheat.waiting_for_cheat)
 
-    keyboard = await cancel_keyboard()
+    keyboard = cancel_keyboard()
     await message.answer("Write a cheat:", reply_markup=keyboard)
 
 
@@ -243,13 +205,12 @@ async def cheat_input_cheat(message: types.Message, state: FSMContext) -> None:
 
     record = [input_name, lab, input_cheat]
 
-    try:
-        await asyncio.to_thread(
-            sheet_service.add_record, worksheet_index=2, record=record
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(
+        message,
+        sheet_service.add_record,
+        worksheet_index=WorksheetIndex.CHEATS,
+        record=record,
+    ):
         return
 
     await message.answer("Your cheat was added")
@@ -262,80 +223,76 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
     if not input_name:
         return
 
-    try:
-        await asyncio.to_thread(sheet_service.sort, 0)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
         return
 
-    try:
-        records = await asyncio.to_thread(
-            sheet_service.find_records, worksheet_index=0, name=input_name
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    records = await run_sheet_operation(
+        message,
+        sheet_service.find_records,
+        worksheet_index=WorksheetIndex.QUEUE,
+        name=input_name,
+    )
+    if records is None:
         return
-
     if not records:
         await message.answer("No records found")
         return
 
-    keyboard = await records_keyboard(records, "remove")
+    keyboard = records_keyboard(records, "remove", message.from_user.id)
     await message.answer("Choose the record to remove:", reply_markup=keyboard)
 
 
 @router.message(Command("done"))
 async def cmd_done(message: types.Message) -> None:
     # TODO: add input by message (1 2 3 make done the rows: 1, 2, 3)
-    try:
-        await asyncio.to_thread(sheet_service.sort, 0)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
         return
 
-    try:
-        records = await asyncio.to_thread(
-            sheet_service.get_queue_records, worksheet_index=0, was="no"
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    records = await run_sheet_operation(
+        message,
+        sheet_service.get_queue_records,
+        worksheet_index=WorksheetIndex.QUEUE,
+        was="no",
+    )
+    if records is None:
+        return
+    if not records:
+        await message.answer("No records found")
         return
 
-    keyboard = await records_keyboard(records, "done")
+    keyboard = records_keyboard(records, "done", message.from_user.id)
     await message.answer("Choose the record to make done:", reply_markup=keyboard)
 
 
 @router.message(Command("missed"))
 async def cmd_missed(message: types.Message) -> None:
-    try:
-        await asyncio.to_thread(sheet_service.sort, 0)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
         return
 
-    try:
-        records = await asyncio.to_thread(
-            sheet_service.get_queue_records, worksheet_index=0, was="no"
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    records = await run_sheet_operation(
+        message,
+        sheet_service.get_queue_records,
+        worksheet_index=WorksheetIndex.QUEUE,
+        was="no",
+    )
+    if records is None:
+        return
+    if not records:
+        await message.answer("No records found")
         return
 
-    keyboard = await records_keyboard(records, "missed")
+    keyboard = records_keyboard(records, "missed", message.from_user.id)
     await message.answer("Choose the record to make missed:", reply_markup=keyboard)
 
 
 @router.message(Command("sheet"))
 async def cmd_sheet(message: types.Message) -> None:
     text = f'<a href="{sheet_service.SHEET_URL}">google_sheet</a>'
-
-    await message.answer(text, parse_mode="HTML", link_preview_options=None)
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        link_preview_options=types.LinkPreviewOptions(is_disabled=True),
+    )
 
 
 @router.message(Command("recover"))
@@ -343,23 +300,22 @@ async def cmd_recover(message: types.Message) -> None:
     """
     return record status in "Was?" to "no"
     """
-    try:
-        await asyncio.to_thread(sheet_service.sort, 0)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
         return
 
-    try:
-        records = await asyncio.to_thread(
-            sheet_service.get_queue_records, worksheet_index=0, was_not="no"
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    records = await run_sheet_operation(
+        message,
+        sheet_service.get_queue_records,
+        worksheet_index=WorksheetIndex.QUEUE,
+        was_not="no",
+    )
+    if records is None:
+        return
+    if not records:
+        await message.answer("No records found")
         return
 
-    keyboard = await records_keyboard(records, "no")
+    keyboard = records_keyboard(records, "no", message.from_user.id)
     await message.answer("Choose the record to make no:", reply_markup=keyboard)
 
 
@@ -372,24 +328,21 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
     if not input_name:
         return
 
-    try:
-        await asyncio.to_thread(sheet_service.sort, 0)
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    if not await run_sheet_operation(message, sheet_service.sort, WorksheetIndex.QUEUE):
         return
 
-    try:
-        records = await asyncio.to_thread(
-            sheet_service.get_queue_records,
-            worksheet_index=0,
-            was_not="no",
-            input_name=input_name,
-        )
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
-        await message.answer("Error writing to the table.")
+    records = await run_sheet_operation(
+        message,
+        sheet_service.get_queue_records,
+        worksheet_index=WorksheetIndex.QUEUE,
+        was_not="no",
+        input_name=input_name,
+    )
+    if records is None:
+        return
+    if not records:
+        await message.answer("No records found")
         return
 
-    keyboard = await records_keyboard(records, "no")
+    keyboard = records_keyboard(records, "no", message.from_user.id)
     await message.answer("Choose the record to make no:", reply_markup=keyboard)

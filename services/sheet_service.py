@@ -2,6 +2,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from config import CREDITS_PATH, SHEET_URL
+from constants.enums import QueueColumn
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -9,11 +10,11 @@ SCOPES = [
 ]
 SERVICE_ACCOUNT_FILE = CREDITS_PATH
 
-# TODO: Make constants for worksheet
+# TODO: Refactor to casses
+
 
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 client = gspread.authorize(creds)
-
 spreadsheet = client.open_by_url(SHEET_URL)
 
 
@@ -111,5 +112,10 @@ def add_tip(worksheet_index: int, name: str, lab: int, tip: str) -> None:
 
 def sort(worksheet_index: int) -> None:
     worksheet = spreadsheet.get_worksheet(worksheet_index)
-    # TODO: define 5, 2, 3
-    worksheet.sort((5, "des"), (2, "asc"), (3, "asc"), range="A2:E100")
+    row_count = worksheet.row_count
+    worksheet.sort(
+        (QueueColumn.WAS, "des"),
+        (QueueColumn.DATE, "asc"),
+        (QueueColumn.TIME, "asc"),
+        range=f"A2:F{max(row_count, 2)}",
+    )

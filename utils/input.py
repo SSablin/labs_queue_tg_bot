@@ -14,7 +14,7 @@ async def input_name_from_db(
     if pool is None:
         logger.error("DB error")
         await message.answer("Error: no connection with DB")
-        return
+        return None
 
     if not message.from_user:
         await message.answer("Failed to get user_id")
@@ -26,13 +26,27 @@ async def input_name_from_db(
             message.from_user.id,
         )
     except Exception as e:
-        logger.error(f"UPSERT error: {e}")
+        logger.error(f"DB error: {e}")
         await message.answer("Connection error")
         return
 
-    if not input_name:
-        logger.error(f"No input_name in db for user_id: {message.from_user.id}")
-        await message.answer("No name in database. Did you authorize?")
+    return input_name
+
+
+async def parse_lab(message: types.Message) -> int | None:
+    input_lab = message.text
+    if not input_lab:
+        await message.answer("Lab can not be empty. Try again.")
         return
 
-    return input_name
+    try:
+        lab = int(input_lab)
+    except ValueError:
+        await message.answer("Lab must be integer. Try again.")
+        return
+
+    if lab <= 0:
+        await message.answer("Lab must be a positive integer. Try again.")
+        return None
+
+    return lab

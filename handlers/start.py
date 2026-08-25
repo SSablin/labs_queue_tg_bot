@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiogram import Dispatcher, F, Router, types
@@ -19,20 +20,17 @@ logger = logging.getLogger(__name__)
 async def cmd_start(
     message: types.Message, state: FSMContext, dispatcher: Dispatcher
 ) -> None:
-    input_name = await input_name_from_db(message, dispatcher)
-    if not input_name:
-        return
-
     if not message.from_user:
         await message.answer("Failed to get user_id")
         return
 
-    if input_name is not None:
-        keyboard = await user_db_keyboard(message.from_user.id)
+    input_name = await input_name_from_db(message, dispatcher)
+    if input_name:
+        keyboard = user_db_keyboard(message.from_user.id)
         await message.answer(f"Hello, {input_name}!", reply_markup=keyboard)
     else:
         await state.set_state(Start.waiting_for_auth)
-        keyboard = await cancel_keyboard()
+        keyboard = cancel_keyboard()
         await message.answer("What is your name?", reply_markup=keyboard)
 
 
@@ -58,7 +56,7 @@ async def cmd_edit_profile(message: types.Message, state: FSMContext):
     await state.set_state(Start.waiting_for_auth)
 
     await state.update_data(is_name_change=True)
-    keyboard = await cancel_keyboard()
+    keyboard = cancel_keyboard()
     await message.answer("Enter new name:", reply_markup=keyboard)
 
 
@@ -94,7 +92,7 @@ async def input_name(
         await message.answer("Connection error")
         return
 
-    keyboard = await user_db_keyboard(message.from_user.id)
+    keyboard = user_db_keyboard(message.from_user.id)
     data = await state.get_data()
     if data.get("is_name_change"):
         msg = "Name updated successfully!"
@@ -108,7 +106,6 @@ async def input_name(
         )
 
     await message.answer(msg, reply_markup=keyboard)
-
     await state.clear()
 
 

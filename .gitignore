@@ -5,6 +5,7 @@
 /secrets
 .env
 config.py
+*.json
 
 /__pycache__
 *.pyc

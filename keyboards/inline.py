@@ -4,6 +4,7 @@ import logging
 from aiogram import F, Router, types
 from aiogram.fsm.context import FSMContext
 
+from constants.enums import QueueColumn, WorksheetIndex
 from services import sheet_service
 from states.start import Start
 from utils.fsm import clear_fsm_logic
@@ -12,13 +13,13 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
-async def cancel_keyboard() -> types.InlineKeyboardMarkup:
+def cancel_keyboard() -> types.InlineKeyboardMarkup:
     button = types.InlineKeyboardButton(text="cancel", callback_data="cancel_fsm")
 
     return types.InlineKeyboardMarkup(inline_keyboard=[[button]])
 
 
-async def user_db_keyboard(user_id: int) -> types.InlineKeyboardMarkup:
+def user_db_keyboard(user_id: int) -> types.InlineKeyboardMarkup:
     button = types.InlineKeyboardButton(
         text="Change name", callback_data=f"user_id:{user_id}"
     )
@@ -26,28 +27,25 @@ async def user_db_keyboard(user_id: int) -> types.InlineKeyboardMarkup:
     return types.InlineKeyboardMarkup(inline_keyboard=[[button]])
 
 
-async def records_keyboard(
-    records: list[list[str]], action: str
+def records_keyboard(
+    records: list[list[str]], action: str, user_id: int | None = None
 ) -> types.InlineKeyboardMarkup:
     buttons = []
     for cell in records:
         label = f"№{cell[0]}: {cell[1]} (lab.{cell[2]}) (st.{cell[3]})"
-        try:
-            row_number = int(cell[0])
-        except Exception as e:
-            logger.error(f"Row number is not integer: {e}")
-            return
 
-        callback_data = f"{action}:{cell[0]}"
-        buttons.append(
-            [types.InlineKeyboardButton(text=label, callback_data=callback_data)]
-        )
+        data = f"{action}:{cell[0]}"
+        if user_id is not None:
+            data += f":{user_id}"
+        buttons.append([types.InlineKeyboardButton(text=label, callback_data=data)])
 
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @router.callback_query(F.data == "cancel_fsm")
-async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
+async def cancel_callback_handler(
+    callback: types.CallbackQuery, state: FSMContext
+) -> None:
     was_active = await clear_fsm_logic(state)
 
     if not callback.message:
@@ -66,7 +64,9 @@ async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data.startswith("user_id:"))
-async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
+async def user_id_callback_handler(
+    callback: types.CallbackQuery, state: FSMContext
+) -> None:
     await callback.answer()
     await state.set_state(Start.waiting_for_auth)
 
@@ -78,7 +78,7 @@ async def user_id_callback_handler(callback: types.CallbackQuery, state: FSMCont
 
     await state.update_data(is_name_change=True)
 
-    keyboard = await cancel_keyboard()
+    keyboard = cancel_keyboard()
     await callback.message.answer("Enter new name:", reply_markup=keyboard)
 
 
@@ -92,18 +92,39 @@ async def remove_callback(callback: types.CallbackQuery) -> None:
 
     if not callback.data:
         logger.error("No callback data")
-        callback.message.answer("The button is invalid")
+        await callback.message.answer("The button is invalid")
         return
 
-    row_number = int(callback.data.split(":", 1)[1])
+    parts = callback.data.split(":")
+    if len(parts) == 3:
+        action, row_str, user_id_str = parts
+        if int(user_id_str) != callback.from_user.id:
+            await callback.answer("You cannot do that.", show_alert=True)
+            return
+    else:
+        logger.error("Callback data is incorrect")
+        await callback.message.answer("The button is invalid")
+        return
+
     try:
-        await asyncio.to_thread(sheet_service.delete_record, 0, row_number)
+        row_number = int(row_str)
+    except (ValueError, IndexError):
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+
+    try:
+        await asyncio.to_thread(
+            sheet_service.delete_record, WorksheetIndex.QUEUE, row_number
+        )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
         await callback.message.answer("Error writing to the table.")
         return
 
-    await callback.message.edit_text(f"Record №{row_number} was removed.")
+    await callback.message.edit_text(
+        f"Record №{row_number} was removed.",
+        reply_markup=None,
+    )
     await callback.answer("Removed")
 
 
@@ -119,16 +140,35 @@ async def action_callback(callback: types.CallbackQuery) -> None:
 
     if not callback.data:
         logger.error("No callback data")
-        callback.message.answer("The button is invalid")
+        await callback.message.answer("The button is invalid")
         return
 
-    value = callback.data.split(":", 1)[0]
-    row_number = int(callback.data.split(":", 1)[1])
-    col_number = 5
+    parts = callback.data.split(":")
+    if len(parts) == 3:
+        action, row_str, user_id_str = parts
+        if int(user_id_str) != callback.from_user.id:
+            await callback.answer("You cannot do that.", show_alert=True)
+            return
+    else:
+        logger.error("Callback data is incorrect")
+        await callback.message.answer("The button is invalid")
+        return
+
+    try:
+        row_number = int(row_str)
+    except (ValueError, IndexError):
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+
+    col_number = QueueColumn.WAS
 
     try:
         await asyncio.to_thread(
-            sheet_service.update_cell, 0, row_number, col_number, value
+            sheet_service.update_cell,
+            WorksheetIndex.QUEUE,
+            row_number,
+            col_number,
+            action,
         )
     except Exception as e:
         logger.error(f"Sheet error: {e}")
@@ -136,7 +176,11 @@ async def action_callback(callback: types.CallbackQuery) -> None:
         return
 
     try:
-        await callback.message.edit_text(text=f"Status was updated to <b>{value}</b> for row #{row_number}.", reply_markup=None)
+        await callback.message.edit_text(
+            text=f"Status was updated to <b>{action}</b> for row #{row_number}.",
+            reply_markup=None,
+            parse_mode="HTML",
+        )
     except Exception as e:
         logger.error(f"Failed to edit message: {e}")
         await callback.message.answer("Form canceled.")
