@@ -108,7 +108,6 @@ async def remove_callback(callback: types.CallbackQuery) -> None:
         await callback.answer("Invalid button data.", show_alert=True)
         return
 
-    # find row by UUID
     try:
         deleted = await asyncio.to_thread(
             sheet_service.delete_record_by_id, WorksheetIndex.QUEUE, record_id

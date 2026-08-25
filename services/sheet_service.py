@@ -1,4 +1,5 @@
 import uuid
+import logging
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -13,6 +14,8 @@ SCOPES = [
 SERVICE_ACCOUNT_FILE = CREDITS_PATH
 
 # TODO: Refactor to casses
+
+logger = logging.getLogger(__name__)
 
 
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -53,20 +56,23 @@ def get_queue_records(
     rows = []
 
     for i, row in enumerate(data):
-        if (
-            (was is None or was == row["Was?"])
-            and (was_not is None or was_not != row["Was?"])
-            and (input_name is None or input_name == row["Name"])
-        ):
-            rows.append(
-                [
-                    str(i + 1),
-                    str(row["Name"]),
-                    str(row["Lab"]),
-                    str(row["Was?"]),
-                    str(row["record_id"]),
-                ]
-            )
+        if row.get("record_id", ""):
+            if (
+                (was is None or was == row["Was?"])
+                and (was_not is None or was_not != row["Was?"])
+                and (input_name is None or input_name == row["Name"])
+            ):
+                rows.append(
+                    [
+                        str(i + 1),
+                        str(row["Name"]),
+                        str(row["Lab"]),
+                        str(row["Was?"]),
+                        str(row["record_id"]),
+                    ]
+                )
+        else:
+            logger.warning(f"No record_id in row: {row}")
     return rows
 
 
@@ -88,16 +94,19 @@ def find_records(
 
     for i, row in enumerate(data):
         if row["Name"] == name:
-            if lab is None or row["Lab"] == str(lab):
-                rows.append(
-                    [
-                        str(i + 1),
-                        str(row["Name"]),
-                        str(row["Lab"]),
-                        str(row["Was?"]),
-                        str(row["record_id"]),
-                    ]
-                )
+            if row.get("record_id", ""):
+                if lab is None or row["Lab"] == str(lab):
+                    rows.append(
+                        [
+                            str(i + 1),
+                            str(row["Name"]),
+                            str(row["Lab"]),
+                            str(row["Was?"]),
+                            str(row["record_id"]),
+                        ]
+                    )
+            else:
+                logger.warning(f"No record_id in row: {row}")
 
     return rows
 
@@ -129,7 +138,7 @@ def _find_row_number_by_record_id(worksheet, record_id: str) -> int | None:
     data = worksheet.get_all_records()
     for i, row in enumerate(data):
         if str(row.get("record_id")) == record_id:
-            return i + 2  # +2, because i – index (first row is header)
+            return i + 2  # +2, because i - index (first row is header)
     return None
 
 
@@ -159,3 +168,12 @@ def fill_uuid_rows(worksheet_index: int) -> None:
     for i, row in enumerate(data):
         if not row.get("record_id"):
             worksheet.update_cell(i + 2, QueueColumn.RECORD_ID, str(uuid.uuid4()))
+
+
+def get_record_by_id(worksheet_index: int, record_id: str) -> dict | None:
+    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    data = worksheet.get_all_records()
+    for record in data:
+        if record.get("record_id") == record_id:
+            return record
+    return None
