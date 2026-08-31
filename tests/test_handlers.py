@@ -39,7 +39,8 @@ async def test_cmd_start_existing_user(monkeypatch):
     async def fake_input_name_from_db(msg, dispatcher):
         return "Alice"
 
-    monkeypatch.setattr("utils.input.input_name_from_db", fake_input_name_from_db)
+    # Patch the symbol used by handlers.start (it imports input_name_from_db at module import)
+    monkeypatch.setattr("handlers.start.input_name_from_db", fake_input_name_from_db)
 
     msg = DummyMessage(from_user=SimpleNamespace(id=10))
     state = DummyState()
@@ -60,7 +61,8 @@ async def test_input_name_creates_user_and_replies(monkeypatch):
         assert user_id == 42
         assert input_name == "MyName"
 
-    monkeypatch.setattr("database.db.upsert_user", fake_upsert_user)
+    # Patch the upsert_user symbol used by the handler (imported into handlers.start module)
+    monkeypatch.setattr("handlers.start.upsert_user", fake_upsert_user)
 
     msg = DummyMessage(text="MyName", from_user=SimpleNamespace(id=42, username="u", full_name="F"))
 
