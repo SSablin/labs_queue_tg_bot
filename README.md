@@ -53,11 +53,3 @@ Unit tests are provided using pytest and pytest-asyncio. The test suite uses lig
 Continuous Integration
 
 A GitHub Actions workflow is included (.github/workflows/ci.yml) that runs pytest on push and pull requests.
-
-Notes and suggestions
-
-- Keep secrets out of the repository; use GitHub Secrets for CI.
-- Consider adding a requirements-dev.txt (already present) and documenting all runtime dependencies in requirements.txt.
-- For integration tests that require real Google Sheets or a real DB, use dedicated test accounts and configure secrets in CI only for those workflows.
-
-If you need help adding CI secrets or writing integration tests, tell me which provider you use for secrets and I can add examples.
