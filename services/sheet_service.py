@@ -13,18 +13,30 @@ SCOPES = [
 ]
 SERVICE_ACCOUNT_FILE = CREDITS_PATH
 
-# TODO: Refactor to casses
+# TODO: Refactor to classes
 
 logger = logging.getLogger(__name__)
 
+# Lazy initialization of gspread spreadsheet to avoid side-effects at import time
+_spreadsheet = None
 
-creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-client = gspread.authorize(creds)
-spreadsheet = client.open_by_url(SHEET_URL)
+def _init_spreadsheet():
+    global _spreadsheet
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    _spreadsheet = client.open_by_url(SHEET_URL)
+
+
+def _get_spreadsheet():
+    global _spreadsheet
+    if _spreadsheet is None:
+        _init_spreadsheet()
+    return _spreadsheet
+
 
 
 def get_queue(worksheet_index: int, was: str | None = None) -> list[list[str]]:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     data = worksheet.get_all_records()
     headers = ["№", "Name", "Date", "Time", "Lab", "Was?"]
     rows = [headers]
@@ -51,7 +63,7 @@ def get_queue_records(
     was_not: str | None = None,
     input_name: str | None = None,
 ) -> list[list[str]]:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     data = worksheet.get_all_records()
     rows = []
 
@@ -80,14 +92,14 @@ def add_record(worksheet_index: int, record: list, add_uuid: bool = False) -> No
     if add_uuid:
         record_id = str(uuid.uuid4())
         record.append(record_id)
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     worksheet.append_row(record, value_input_option="USER_ENTERED")
 
 
 def find_records(
     worksheet_index: int, name: str, lab: int | None = None
 ) -> list[list[str]]:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     data = worksheet.get_all_records()
 
     rows = []
@@ -114,17 +126,17 @@ def find_records(
 def update_record(
     worksheet_index: int, row_number: int, values: list[list[int | str]]
 ) -> None:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     worksheet.update(values=values, range_name=f"A{row_number}")
 
 
 def add_tip(worksheet_index: int, name: str, lab: int, tip: str) -> None:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     worksheet.append_row([name, lab, tip])
 
 
 def sort(worksheet_index: int) -> None:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     row_count = worksheet.row_count
     worksheet.sort(
         (QueueColumn.WAS, "des"),
@@ -143,7 +155,7 @@ def _find_row_number_by_record_id(worksheet, record_id: str) -> int | None:
 
 
 def delete_record_by_id(worksheet_index: int, record_id: str) -> bool:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     row_number = _find_row_number_by_record_id(worksheet, record_id)
     if row_number is None:
         return False
@@ -154,7 +166,7 @@ def delete_record_by_id(worksheet_index: int, record_id: str) -> bool:
 def update_cell_by_id(
     worksheet_index: int, record_id: str, col_number: int, value
 ) -> bool:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     row_number = _find_row_number_by_record_id(worksheet, record_id)
     if row_number is None:
         return False
@@ -163,7 +175,7 @@ def update_cell_by_id(
 
 
 def fill_uuid_rows(worksheet_index: int) -> None:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     data = worksheet.get_all_records()
     for i, row in enumerate(data):
         if not row.get("record_id"):
@@ -171,7 +183,7 @@ def fill_uuid_rows(worksheet_index: int) -> None:
 
 
 def get_record_by_id(worksheet_index: int, record_id: str) -> dict | None:
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+    worksheet = _get_spreadsheet().get_worksheet(worksheet_index)
     data = worksheet.get_all_records()
     for record in data:
         if record.get("record_id") == record_id:

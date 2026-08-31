@@ -47,11 +47,11 @@ async def cancel_handler(message: types.Message, state: FSMContext) -> None:
             reply_markup=types.ReplyKeyboardRemove(),
         )
     else:
-        await message.answer("You are not filling now.")
+        await message.answer("You are not filling anything right now.")
 
 
 @router.message(Command("edit_profile"))
-async def cmd_edit_profile(message: types.Message, state: FSMContext):
+async def cmd_edit_profile(message: types.Message, state: FSMContext) -> None:
     await state.set_state(Start.waiting_for_auth)
 
     await state.update_data(is_name_change=True)
@@ -63,10 +63,10 @@ async def cmd_edit_profile(message: types.Message, state: FSMContext):
 async def input_name(
     message: types.Message, state: FSMContext, dispatcher: Dispatcher
 ) -> None:
-    pool = dispatcher["pool"]
-    if pool is None:
-        logger.error("DB error")
-        await message.answer("Error: no connection with DB")
+    pool = dispatcher.get("pool")
+    if not pool:
+        logger.error("DB error: dispatcher has no 'pool' configured")
+        await message.answer("Error: no connection to DB")
         return
 
     input_name = message.text
@@ -86,8 +86,8 @@ async def input_name(
             message.from_user.full_name,
             input_name,
         )
-    except Exception as e:
-        logger.error(f"UPSERT error: {e}")
+    except Exception:
+        logger.exception("UPSERT error while saving user %s", message.from_user.id)
         await message.answer("Connection error")
         return
 
@@ -95,14 +95,10 @@ async def input_name(
     data = await state.get_data()
     if data.get("is_name_change"):
         msg = "Name updated successfully!"
-        logger.info(
-            f"User {message.from_user.id} succesfully updated name: {input_name}"
-        )
+        logger.info("User %s successfully updated name: %s", message.from_user.id, input_name)
     else:
         msg = f"Your name in table is {input_name}!"
-        logger.info(
-            f"User {message.from_user.id} succesfully added to db, name: {input_name}"
-        )
+        logger.info("User %s successfully added to db, name: %s", message.from_user.id, input_name)
 
     await message.answer(msg, reply_markup=keyboard)
     await state.clear()
@@ -127,3 +123,16 @@ async def cmd_help(message: types.Message):
 /rebirth
 """
     await message.answer(text=text, parse_mode="HTML")
+
+
+@router.message(Command("source"))
+async def cmd_source(message: types.Message):
+    text = """
+<b>github</b>
+<a href="https://github.com/SSablin/labs_queue_tg_bot">source</a>
+"""
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        link_preview_options=types.LinkPreviewOptions(is_disabled=True),
+    )

@@ -5,7 +5,6 @@ import asyncpg
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN, DB_CONFIG, PROXY
@@ -45,14 +44,14 @@ async def main():
             min_size=5,
             max_size=20,
         )
-    except Exception as e:
-        logger.critical(f"Failed to connect to DB: {e}")
+    except Exception:
+        logger.critical("Failed to connect to DB", exc_info=True)
         return
 
     try:
         await init_db(pool)
-    except Exception as e:
-        logger.error(f"Error with initializing db: {e}")
+    except Exception:
+        logger.exception("Error with initializing db")
 
     logger.info("Pool connections with DB was successfully created")
 

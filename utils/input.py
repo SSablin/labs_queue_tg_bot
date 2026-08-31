@@ -10,25 +10,25 @@ logger = logging.getLogger(__name__)
 async def input_name_from_db(
     message: types.Message, dispatcher: Dispatcher
 ) -> str | None:
-    pool = dispatcher["pool"]
-    if pool is None:
-        logger.error("DB error")
-        await message.answer("Error: no connection with DB")
+    pool = dispatcher.get("pool")
+    if not pool:
+        logger.exception("DB error: dispatcher has no 'pool' configured")
+        await message.answer("Error: no connection to DB")
         return None
 
     if not message.from_user:
         await message.answer("Failed to get user_id")
-        return
+        return None
 
     try:
         input_name = await get_user(
             pool,
             message.from_user.id,
         )
-    except Exception as e:
-        logger.error(f"DB error: {e}")
+    except Exception:
+        logger.exception("DB error while fetching user %s", getattr(message.from_user, 'id', None))
         await message.answer("Connection error")
-        return
+        return None
 
     return input_name
 

@@ -58,8 +58,8 @@ async def cancel_callback_handler(
         await callback.answer("Form has already filled or finished.", show_alert=True)
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
-    except Exception as e:
-        logger.error(f"Failed to edit message: {e}")
+    except Exception:
+        logger.exception("Failed to edit message")
         await callback.message.answer("Form canceled.")
 
 
@@ -116,8 +116,8 @@ async def remove_callback(callback: types.CallbackQuery) -> None:
             await callback.message.edit_reply_markup(reply_markup=None)
             await callback.message.answer("Record not found or already removed.")
             return
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
+    except Exception:
+        logger.exception("Sheet error while deleting record")
         await callback.message.answer("Error deleting record.")
         return
 
@@ -170,8 +170,8 @@ async def action_callback(callback: types.CallbackQuery) -> None:
             await callback.message.edit_reply_markup(reply_markup=None)
             await callback.message.answer("Record not found.")
             return
-    except Exception as e:
-        logger.error(f"Sheet error: {e}")
+    except Exception:
+        logger.exception("Sheet error while updating record")
         await callback.message.answer("Error updating record.")
         return
 
