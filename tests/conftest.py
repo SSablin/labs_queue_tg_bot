@@ -52,6 +52,32 @@ _types_ns.LinkPreviewOptions = _LinkPreviewOptions
 
 aiogram.types = _types_ns
 
+# Provide aiogram.filters module with Command
+filters_mod = ModuleType("aiogram.filters")
+# Command returns a simple marker object — router.message will accept it
+filters_mod.Command = lambda *args, **kwargs: object()
+sys.modules["aiogram.filters"] = filters_mod
+
+# Provide aiogram.fsm.context with FSMContext
+fsm_mod = ModuleType("aiogram.fsm")
+fsm_context = ModuleType("aiogram.fsm.context")
+
+class FSMContext:
+    async def set_state(self, *args, **kwargs):
+        return None
+    async def update_data(self, *args, **kwargs):
+        return None
+    async def get_data(self, *args, **kwargs):
+        return {}
+    async def clear(self, *args, **kwargs):
+        return None
+
+fsm_context.FSMContext = FSMContext
+sys.modules["aiogram.fsm"] = fsm_mod
+sys.modules["aiogram.fsm.context"] = fsm_context
+
+aiogram.types = _types_ns
+
 sys.modules["aiogram"] = aiogram
 
 # Stub asyncpg to avoid installing it for unit tests of utils
