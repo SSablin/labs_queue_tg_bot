@@ -2,6 +2,7 @@ import pytest
 from types import SimpleNamespace
 
 from handlers.start import cmd_start, input_name
+from keyboards import inline as inline_keyboards
 
 
 class DummyMessage:
@@ -77,3 +78,19 @@ async def test_input_name_creates_user_and_replies(monkeypatch):
 
     assert msg.answers, "Expected a reply after saving name"
     assert any("Your name in table is" in a["text"] or "Name updated successfully" in a["text"] for a in msg.answers)
+
+
+def test_get_current_sheet_datetime(monkeypatch):
+    from datetime import datetime as real_datetime
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls):
+            return real_datetime(2024, 1, 2, 3, 4, 5)
+
+    monkeypatch.setattr(inline_keyboards, "datetime", FixedDateTime)
+
+    current_date, current_time = inline_keyboards.get_current_sheet_datetime()
+
+    assert current_date == "02.01.2024"
+    assert current_time == "03:04"

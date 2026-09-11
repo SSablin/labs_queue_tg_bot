@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 
 from aiogram import F, Router, types
 from aiogram.fsm.context import FSMContext
@@ -40,6 +41,11 @@ def records_keyboard(
             data += f":{user_id}"
         buttons.append([types.InlineKeyboardButton(text=label, callback_data=data)])
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_current_sheet_datetime() -> tuple[str, str]:
+    now = datetime.now()
+    return now.strftime("%d.%m.%Y"), now.strftime("%H:%M")
 
 
 @router.callback_query(F.data == "cancel_fsm")
@@ -174,6 +180,36 @@ async def action_callback(callback: types.CallbackQuery) -> None:
         logger.exception("Sheet error while updating record")
         await callback.message.answer("Error updating record.")
         return
+
+    if action == "done":
+        current_date, current_time = get_current_sheet_datetime()
+        try:
+            updated = await asyncio.to_thread(
+                sheet_service.update_cell_by_id,
+                WorksheetIndex.QUEUE,
+                record_id,
+                QueueColumn.DATE,
+                current_date,
+            )
+            if not updated:
+                await callback.message.edit_reply_markup(reply_markup=None)
+                await callback.message.answer("Record not found.")
+                return
+            updated = await asyncio.to_thread(
+                sheet_service.update_cell_by_id,
+                WorksheetIndex.QUEUE,
+                record_id,
+                QueueColumn.TIME,
+                current_time,
+            )
+            if not updated:
+                await callback.message.edit_reply_markup(reply_markup=None)
+                await callback.message.answer("Record not found.")
+                return
+        except Exception:
+            logger.exception("Sheet error while updating record")
+            await callback.message.answer("Error updating record.")
+            return
 
     try:
         await callback.message.edit_text(
