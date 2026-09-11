@@ -329,11 +329,14 @@ async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
     if records is None:
         return
     if not records:
-        await message.answer("No completed records found")
+        await message.answer("You do not have any completed records to return to the queue.")
         return
 
     keyboard = records_keyboard(records, "no", message.from_user.id)
-    await message.answer("Choose the completed record to return to the queue:", reply_markup=keyboard)
+    await message.answer(
+        "Choose a completed record to move it back to the active queue:",
+        reply_markup=keyboard,
+    )
 
 
 @router.message(Command("sheet"))
@@ -372,8 +375,11 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
     if records is None:
         return
     if not records:
-        await message.answer("No records found")
+        await message.answer("You do not have any records that can be reset to active status.")
         return
 
     keyboard = records_keyboard(records, "no", message.from_user.id)
-    await message.answer("Choose the record to make no:", reply_markup=keyboard)
+    await message.answer(
+        "Choose a record to reset it back to active status:",
+        reply_markup=keyboard,
+    )
