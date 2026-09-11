@@ -107,20 +107,32 @@ async def input_name(
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
     text = """
-<b>Commands</b>
-/start
-/edit_profile
-/cancel
-/help
-/sheet
-/queue
-/add
-/cheat
-/remove
-/done
-/missed
-/recover
-/rebirth
+<b>Bot help</b>
+
+<b>1. Profile and setup</b>
+• /start — start working with the bot. If your name is already saved, the bot greets you; otherwise it asks for your name.
+• /edit_profile — update the saved name.
+• /cancel — cancel the current prompt and return to the previous state.
+
+<b>2. Queue actions</b>
+• /queue — open the current queue and sort records.
+• /add — create a new queue record step by step: lab number, date, and time.
+• /remove — select a queue record from the list and remove it.
+• /done — select a queue record and mark it as done.
+• /missed — select a queue record and mark it as missed.
+• /recover — select a finished or missed record and return it to the active queue.
+• /cheat — create a cheat record step by step.
+• /rebirth — reset your own record status back to active ("no").
+
+<b>3. Sheet and utilities</b>
+• /sheet — open the Google Sheet link.
+• /source — open the project source link.
+• /help — show this help again.
+
+<b>4. How it works</b>
+• Most commands do not take direct arguments in the message text.
+• Instead, the bot asks for the needed data or shows a selection list.
+• If the bot asks you to enter text, just send it. Use /cancel to abort at any time.
 """
     await message.answer(text=text, parse_mode="HTML")
 
