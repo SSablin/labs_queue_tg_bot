@@ -36,6 +36,18 @@ class SheetService:
 
         return rows
 
+    def _is_valid_record_row(self, row: dict) -> bool:
+        if not row.get("record_id", ""):
+            return False
+
+        name = str(row.get("Name", "")).strip()
+        lab = str(row.get("Lab", "")).strip()
+
+        if not name and not lab:
+            logger.warning("Skipping empty record row without name/lab: %s", row)
+            return False
+        return True
+
     def get_queue_records(
         self,
         worksheet_index: int,
@@ -48,21 +60,20 @@ class SheetService:
         rows = []
 
         for i, row in enumerate(data):
-            if row.get("record_id", ""):
-                if (
-                    (was is None or was == row.get("Was?"))
-                    and (was_not is None or was_not != row.get("Was?"))
-                    and (input_name is None or input_name == row.get("Name"))
-                ):
-                    rows.append([
-                        str(i + 1),
-                        str(row.get("Name", "")),
-                        str(row.get("Lab", "")),
-                        str(row.get("Was?", "")),
-                        str(row.get("record_id", "")),
-                    ])
-            else:
-                logger.warning("No record_id in row: %s", row)
+            if not self._is_valid_record_row(row):
+                continue
+            if (
+                (was is None or was == row.get("Was?"))
+                and (was_not is None or was_not != row.get("Was?"))
+                and (input_name is None or input_name == row.get("Name"))
+            ):
+                rows.append([
+                    str(i + 1),
+                    str(row.get("Name", "")),
+                    str(row.get("Lab", "")),
+                    str(row.get("Was?", "")),
+                    str(row.get("record_id", "")),
+                ])
         return rows
 
     def add_record(self, worksheet_index: int, record: list, add_uuid: bool = False) -> None:

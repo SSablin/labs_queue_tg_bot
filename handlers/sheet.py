@@ -301,9 +301,39 @@ async def cmd_missed(message: types.Message) -> None:
 @router.message(Command("recover"))
 async def cmd_recover(message: types.Message) -> None:
     """
-    return record status in "Was?" to "no"
+    Return a completed or missed record to the active queue.
+    Empty rows without a real name/lab are ignored.
     """
     await show_status_keyboard(message, "recover")
+
+
+@router.message(Command("again"))
+async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
+    input_name = await input_name_from_db(message, dispatcher)
+    if not input_name:
+        return
+
+    result = await run_sheet_operation(
+        message, sheet_service.sort, WorksheetIndex.QUEUE
+    )
+    if result is None:
+        return
+
+    records = await run_sheet_operation(
+        message,
+        sheet_service.get_queue_records,
+        worksheet_index=WorksheetIndex.QUEUE,
+        was="done",
+        input_name=input_name,
+    )
+    if records is None:
+        return
+    if not records:
+        await message.answer("No completed records found")
+        return
+
+    keyboard = records_keyboard(records, "no", message.from_user.id)
+    await message.answer("Choose the completed record to return to the queue:", reply_markup=keyboard)
 
 
 @router.message(Command("sheet"))

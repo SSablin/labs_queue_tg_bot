@@ -121,6 +121,7 @@ async def cmd_help(message: types.Message):
 • /done — select a queue record and mark it as done.
 • /missed — select a queue record and mark it as missed.
 • /recover — select a finished or missed record and return it to the active queue.
+• /again — select your own completed record and return it to the active queue.
 • /cheat — create a cheat record step by step.
 • /rebirth — reset your own record status back to active ("no").
 
