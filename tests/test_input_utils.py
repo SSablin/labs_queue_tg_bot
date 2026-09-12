@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import asyncio
 
-from utils.input import parse_lab, input_name_from_db
+from utils.input import parse_lab, input_name_from_db, parse_date
 
 
 class DummyMessage:
@@ -105,3 +105,10 @@ async def test_input_name_get_user_exception(monkeypatch):
     assert res is None
     assert msg.answers
     assert "Connection error" in msg.answers[-1]
+
+
+@pytest.mark.asyncio
+async def test_parse_date_valid():
+    msg = DummyMessage(text="September 6, 2026 at 12:11:41 PM GMT+3")
+    res = await parse_date(msg)
+    assert res == {"date": "06.09.2026", "time": "12:11:41"}

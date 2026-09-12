@@ -3,6 +3,7 @@ import logging
 from aiogram import Dispatcher, types
 
 from database.session_manager import get_user
+from utils.str import parse_str_date
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,9 @@ async def input_name_from_db(
             message.from_user.id,
         )
     except Exception:
-        logger.exception("DB error while fetching user %s", getattr(message.from_user, 'id', None))
+        logger.exception(
+            "DB error while fetching user %s", getattr(message.from_user, "id", None)
+        )
         await message.answer("Connection error")
         return None
 
@@ -37,7 +40,7 @@ async def parse_lab(message: types.Message) -> int | None:
     input_lab = message.text
     if not input_lab:
         await message.answer("Lab can not be empty. Try again.")
-        return
+        return None
 
     try:
         lab = int(input_lab)
@@ -50,3 +53,12 @@ async def parse_lab(message: types.Message) -> int | None:
         return None
 
     return lab
+
+
+async def parse_date(message: types.Message) -> dict[str, str] | None:
+    input_text = message.text
+    if not input_text:
+        await message.answer("Data can not be empty. Try again.")
+        return None
+
+    return await parse_str_date(input_text)

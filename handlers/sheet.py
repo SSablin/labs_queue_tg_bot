@@ -14,8 +14,8 @@ from aiogram.types import (
 from constants.enums import WorksheetIndex
 from keyboards.inline import cancel_keyboard, records_keyboard
 from services import sheet_service
-from states.sheet import Add, Cheat
-from utils.input import input_name_from_db, parse_lab
+from states.sheet import Add, Cheat, Add_oneline
+from utils.input import input_name_from_db, parse_date, parse_lab
 from utils.sheet import run_sheet_operation
 
 router = Router()
@@ -63,6 +63,71 @@ async def cmd_queue(message: types.Message) -> None:
 
     rich_message = InputRichMessage(blocks=[table_block])
     await message.answer_rich(rich_message=rich_message)
+
+
+@router.message(Command("add_oneline"))
+async def cmd_add_oneline(
+    message: types.Message, dispatcher: Dispatcher, state: FSMContext
+):
+    input_name = await input_name_from_db(message, dispatcher)
+    if not input_name:
+        return
+
+    await state.update_data(input_name=input_name)
+
+    await state.set_state(Add_oneline.waiting_for_lab)
+
+    keyboard = cancel_keyboard()
+    await message.answer("Please, send one line date", reply_markup=keyboard)
+
+
+@router.message(Add_oneline.waiting_for_lab)
+async def input_lab_one_line(message: types.Message, state: FSMContext) -> None:
+    lab = await parse_lab(message)
+    if lab is None:
+        return
+
+    await state.update_data(lab=lab)
+
+    if not message.from_user:
+        await message.answer("Failed to get user_id")
+        return
+
+    await state.set_state(Add_oneline.waiting_for_date)
+    keyboard = cancel_keyboard()
+    await message.answer("Which date?", reply_markup=keyboard)
+
+
+@router.message(Add_oneline.waiting_for_date)
+async def on_input_one_line_text(message: types.Message, state: FSMContext):
+    date = await parse_date(message)
+    if date is None:
+        return
+
+    data = await state.get_data()
+    input_name = data.get("input_name")
+    lab = data.get("lab")
+
+    record = [input_name, date["date"], date["time"], lab, "no"]
+
+    result = await run_sheet_operation(
+        message,
+        sheet_service.add_record,
+        worksheet_index=WorksheetIndex.QUEUE,
+        record=record,
+        add_uuid=True,
+    )
+    if result is None:
+        return
+
+    await message.answer(f"New record: {date}")
+    await state.clear()
+
+    result = await run_sheet_operation(
+        message, sheet_service.sort, worksheet_index=WorksheetIndex.QUEUE
+    )
+    if result is None:
+        return
 
 
 @router.message(Command("add"))
@@ -329,7 +394,9 @@ async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
     if records is None:
         return
     if not records:
-        await message.answer("You do not have any completed records to return to the queue.")
+        await message.answer(
+            "You do not have any completed records to return to the queue."
+        )
         return
 
     keyboard = records_keyboard(records, "no", message.from_user.id)
@@ -375,7 +442,9 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
     if records is None:
         return
     if not records:
-        await message.answer("You do not have any records that can be reset to active status.")
+        await message.answer(
+            "You do not have any records that can be reset to active status."
+        )
         return
 
     keyboard = records_keyboard(records, "no", message.from_user.id)
