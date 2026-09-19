@@ -68,7 +68,10 @@ async def test_quick_done_updates_owner_record_status_and_time(monkeypatch):
     def fake_get_record_by_id(worksheet_index, record_id):
         assert worksheet_index == WorksheetIndex.QUEUE
         assert record_id == "record-1"
-        return {"Name": "Alice"}
+        return {
+            "Name": "Alice",
+            "Was?": QueueStatus.ACTIVE.value,
+        }
 
     def fake_update_cell_by_id(worksheet_index, record_id, column, value):
         updates.append((worksheet_index, record_id, column, value))
@@ -86,17 +89,20 @@ async def test_quick_done_updates_owner_record_status_and_time(monkeypatch):
         fake_get_record_by_id,
     )
     monkeypatch.setattr(
+        "keyboards.inline.sheet_service.complete_record_by_id",
+        lambda worksheet, record_id, date, time: updates.append(
+            (worksheet, record_id, date, time)
+        )
+        or "updated",
+    )
+    monkeypatch.setattr(
         "keyboards.inline.sheet_service.update_cell_by_id",
         fake_update_cell_by_id,
     )
 
     await quick_record_action_callback(callback, dispatcher)
 
-    assert updates == [
-        (WorksheetIndex.QUEUE, "record-1", QueueColumn.WAS, QueueStatus.DONE.value),
-        (WorksheetIndex.QUEUE, "record-1", QueueColumn.DATE, "19.09.2026"),
-        (WorksheetIndex.QUEUE, "record-1", QueueColumn.TIME, "21:47"),
-    ]
+    assert updates == [(WorksheetIndex.QUEUE, "record-1", "19.09.2026", "21:47")]
     assert callback.answers[-1][0] == "Updated"
     assert message.edited_reply_markup == [{"reply_markup": None}]
 
@@ -116,6 +122,13 @@ async def test_quick_time_does_not_update_foreign_record(monkeypatch):
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.get_record_by_id",
         lambda worksheet_index, record_id: {"Name": "Bob"},
+    )
+    monkeypatch.setattr(
+        "keyboards.inline.sheet_service.complete_record_by_id",
+        lambda worksheet, record_id, date, time: updates.append(
+            (worksheet, record_id, date, time)
+        )
+        or "updated",
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.update_cell_by_id",
@@ -195,6 +208,13 @@ async def test_done_callback_can_update_foreign_record(monkeypatch):
         or True,
     )
     monkeypatch.setattr(
+        "keyboards.inline.sheet_service.complete_record_by_id",
+        lambda worksheet, record_id, date, time: updates.append(
+            (worksheet, record_id, date, time)
+        )
+        or "updated",
+    )
+    monkeypatch.setattr(
         "keyboards.inline.get_current_sheet_datetime",
         lambda: ("19.09.2026", "21:51"),
     )
@@ -204,8 +224,8 @@ async def test_done_callback_can_update_foreign_record(monkeypatch):
     assert updates[0] == (
         WorksheetIndex.QUEUE,
         "record-1",
-        QueueColumn.WAS,
-        QueueStatus.DONE.value,
+        "19.09.2026",
+        "21:51",
     )
     assert message.edited_text[-1][0] == "Status was updated to <b>done</b>."
 

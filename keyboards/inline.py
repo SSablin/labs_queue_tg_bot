@@ -137,7 +137,6 @@ async def user_id_callback_handler(
 async def remove_callback(
     callback: types.CallbackQuery, dispatcher: Dispatcher
 ) -> None:
-    await callback.answer()
     if not callback.message:
         logger.error("No callback message")
         return
@@ -159,10 +158,6 @@ async def remove_callback(
             return
     else:
         await callback.answer("Invalid button data.", show_alert=True)
-        return
-
-    input_name = await input_name_from_db(callback.message, dispatcher)
-    if not input_name:
         return
 
     try:
@@ -198,8 +193,6 @@ async def remove_callback(
 async def action_callback(
     callback: types.CallbackQuery, dispatcher: Dispatcher
 ) -> None:
-    await callback.answer()
-
     if not callback.message:
         logger.error("No callback message")
         return
@@ -253,43 +246,36 @@ async def action_callback(
 
     update_status = QueueStatus.DONE.value if action == "self_done" else action
 
-    try:
-        updated = await asyncio.to_thread(
-            sheet_service.update_cell_by_id,
-            WorksheetIndex.QUEUE,
-            record_id,
-            QueueColumn.WAS,
-            update_status,
-        )
-        if not updated:
-            await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer("Record not found.")
-            return
-    except Exception:
-        logger.exception("Sheet error while updating record")
-        await callback.message.answer("Error updating record.")
-        return
-
     if update_status == QueueStatus.DONE.value:
         current_date, current_time = get_current_sheet_datetime()
+        try:
+            result = await asyncio.to_thread(
+                sheet_service.complete_record_by_id,
+                WorksheetIndex.QUEUE,
+                record_id,
+                current_date,
+                current_time,
+            )
+            if result == "not_found":
+                await callback.message.edit_reply_markup(reply_markup=None)
+                await callback.message.answer("Record not found.")
+                return
+            if result == "inactive":
+                await callback.message.edit_reply_markup(reply_markup=None)
+                await callback.answer("This record is no longer active.", show_alert=True)
+                return
+        except Exception:
+            logger.exception("Sheet error while completing record")
+            await callback.message.answer("Error updating record.")
+            return
+    else:
         try:
             updated = await asyncio.to_thread(
                 sheet_service.update_cell_by_id,
                 WorksheetIndex.QUEUE,
                 record_id,
-                QueueColumn.DATE,
-                current_date,
-            )
-            if not updated:
-                await callback.message.edit_reply_markup(reply_markup=None)
-                await callback.message.answer("Record not found.")
-                return
-            updated = await asyncio.to_thread(
-                sheet_service.update_cell_by_id,
-                WorksheetIndex.QUEUE,
-                record_id,
-                QueueColumn.TIME,
-                current_time,
+                QueueColumn.WAS,
+                update_status,
             )
             if not updated:
                 await callback.message.edit_reply_markup(reply_markup=None)
@@ -306,7 +292,8 @@ async def action_callback(
             reply_markup=None,
             parse_mode="HTML",
         )
-    except Exception as e:
+        await callback.answer("Updated")
+    except Exception:
         await callback.answer("Failed to edit the message")
         await callback.message.answer(
             f"Status was updated to <b>{update_status}</b>.",
@@ -355,14 +342,31 @@ async def quick_record_action_callback(
             return
 
         current_date, current_time = get_current_sheet_datetime()
-        updates = []
         if action == "quick_time":
-            updates.append((QueueColumn.DATE, current_date))
-            updates.append((QueueColumn.TIME, current_time))
+            updates = [
+                (QueueColumn.DATE, current_date),
+                (QueueColumn.TIME, current_time),
+            ]
         elif action == "quick_done":
-            updates.append((QueueColumn.WAS, QueueStatus.DONE.value))
-            updates.append((QueueColumn.DATE, current_date))
-            updates.append((QueueColumn.TIME, current_time))
+            if record.get("Was?") != QueueStatus.ACTIVE.value:
+                await callback.answer("This record is no longer active.", show_alert=True)
+                await callback.message.edit_reply_markup(reply_markup=None)
+                return
+            result = await asyncio.to_thread(
+                sheet_service.complete_record_by_id,
+                WorksheetIndex.QUEUE,
+                record_id,
+                current_date,
+                current_time,
+            )
+            if result == "not_found":
+                await callback.answer("Record not found.", show_alert=True)
+                return
+            if result == "inactive":
+                await callback.answer("This record is no longer active.", show_alert=True)
+                await callback.message.edit_reply_markup(reply_markup=None)
+                return
+            updates = []
         else:
             await callback.answer("Invalid button data.", show_alert=True)
             return
@@ -389,8 +393,6 @@ async def quick_record_action_callback(
 
 @router.callback_query(F.data.startswith("refresh_queue:"))
 async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
-    await callback.answer()
-
     if not callback.message:
         logger.error("No callback message")
         return
@@ -436,12 +438,14 @@ async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
     )
     if data is None:
         return
-    if not data:
+    if len(data) <= 1:
         await callback.message.answer("Queue is empty")
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
             logger.exception("Failed to remove old button")
+        await callback.answer("Queue is empty.")
+        return
 
     table_grid = []
 
@@ -485,6 +489,7 @@ async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
         logger.exception("Failed to remove old button")
+    await callback.answer("Queue refreshed.")
 
 
 @router.callback_query(F.data.startswith("refresh_records:"))

@@ -70,7 +70,7 @@ async def main():
         creds = Credentials.from_service_account_file(CREDITS_PATH, scopes=SCOPES)
         client = gspread.authorize(creds)
         spreadsheet = client.open_by_url(SHEET_URL)
-        sheet_service.init_service(spreadsheet)
+        sheet_service.init_service(spreadsheet, SHEET_URL)
         logger.info("Google Sheets client initialized")
     except Exception:
         logger.exception("Failed to initialize Google Sheets client. Sheet operations will fail at runtime.")

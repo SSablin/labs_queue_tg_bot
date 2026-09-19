@@ -38,7 +38,7 @@ async def cmd_queue(message: types.Message, dispatcher: Dispatcher) -> None:
     )
     if data is None:
         return
-    if not data:
+    if len(data) <= 1:
         await message.answer("Queue is empty")
         return
 
@@ -486,6 +486,10 @@ async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
 
 @router.message(Command("sheet"))
 async def cmd_sheet(message: types.Message) -> None:
+    if not sheet_service.SHEET_URL:
+        logger.error("Google Sheet URL is not configured")
+        await message.answer("Google Sheet link is unavailable.")
+        return
     text = f'<a href="{sheet_service.SHEET_URL}">google_sheet</a>'
     await message.answer(
         text,

@@ -76,12 +76,17 @@ class SheetService:
                 ])
         return rows
 
-    def add_record(self, worksheet_index: int, record: list, add_uuid: bool = False) -> None:
+    def add_record(
+        self,
+        worksheet_index: int,
+        record: list,
+        add_uuid: bool = False,
+    ) -> None:
+        row = list(record)
         if add_uuid:
-            record_id = str(uuid.uuid4())
-            record.append(record_id)
+            row.append(str(uuid.uuid4()))
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
-        worksheet.append_row(record, value_input_option="USER_ENTERED")
+        worksheet.append_row(row, value_input_option="USER_ENTERED")
 
     def find_records(
         self, worksheet_index: int, name: str, lab: int | None = None
@@ -146,6 +151,36 @@ class SheetService:
         worksheet.update_cell(row_number, col_number, value)
         return True
 
+    def complete_record_by_id(
+        self,
+        worksheet_index: int,
+        record_id: str,
+        date: str,
+        time: str,
+    ) -> str:
+        worksheet = self.spreadsheet.get_worksheet(worksheet_index)
+        data = worksheet.get_all_records()
+        for i, row in enumerate(data):
+            if str(row.get("record_id")) != record_id:
+                continue
+            if row.get("Was?") != "no":
+                return "inactive"
+            row_number = i + 2
+            values = [[
+                row.get("Name", ""),
+                date,
+                time,
+                row.get("Lab", ""),
+                "done",
+                row.get("record_id", ""),
+            ]]
+            worksheet.update(
+                values=values,
+                range_name=f"A{row_number}:F{row_number}",
+            )
+            return "updated"
+        return "not_found"
+
     def fill_uuid_rows(self, worksheet_index: int) -> None:
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
         data = worksheet.get_all_records()
@@ -166,9 +201,14 @@ class SheetService:
 _service: Optional[SheetService] = None
 
 
-def init_service(spreadsheet):
+SHEET_URL: str | None = None
+
+
+def init_service(spreadsheet, sheet_url: str | None = None):
     global _service
+    global SHEET_URL
     _service = SheetService(spreadsheet)
+    SHEET_URL = sheet_url
 
 
 def _ensure_service():
@@ -188,7 +228,11 @@ def get_queue_records(worksheet_index: int, was: str | None = None, was_not: str
 
 def add_record(worksheet_index: int, record: list, add_uuid: bool = False) -> None:
     _ensure_service()
-    return _service.add_record(worksheet_index, record, add_uuid=add_uuid)
+    return _service.add_record(
+        worksheet_index,
+        record,
+        add_uuid=add_uuid,
+    )
 
 
 def find_records(worksheet_index: int, name: str, lab: int | None = None) -> list[list[str]]:
@@ -219,6 +263,13 @@ def delete_record_by_id(worksheet_index: int, record_id: str) -> bool:
 def update_cell_by_id(worksheet_index: int, record_id: str, col_number: int, value) -> bool:
     _ensure_service()
     return _service.update_cell_by_id(worksheet_index, record_id, col_number, value)
+
+
+def complete_record_by_id(
+    worksheet_index: int, record_id: str, date: str, time: str
+) -> str:
+    _ensure_service()
+    return _service.complete_record_by_id(worksheet_index, record_id, date, time)
 
 
 def fill_uuid_rows(worksheet_index: int) -> None:
