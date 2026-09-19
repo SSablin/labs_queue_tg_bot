@@ -1,14 +1,22 @@
 import asyncio
 import logging
 from datetime import datetime
+import time
 
 from aiogram import F, Router, types
 from aiogram.fsm.context import FSMContext
+from aiogram.types import (
+    InputRichBlockTable,
+    InputRichMessage,
+    RichBlockTableCell,
+    RichTextBold,
+)
 
 from constants.enums import QueueColumn, WorksheetIndex
 from services import sheet_service
 from states.start import Start
 from utils.fsm import clear_fsm_logic
+from utils.sheet import run_sheet_operation
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -223,3 +231,101 @@ async def action_callback(callback: types.CallbackQuery) -> None:
             f"Status was updated to <b>{action}</b>.",
             parse_mode="HTML",
         )
+
+
+@router.callback_query(F.data.startswith("refresh_queue:"))
+async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
+    await callback.answer()
+
+    if not callback.message:
+        logger.error("No callback message")
+        return
+
+    if not callback.data:
+        logger.error("No callback data")
+        await callback.message.answer("The button is invalid")
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 2:
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+
+    try:
+        ts = int(parts[1])
+    except ValueError:
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+
+    now = int(time.time())
+    # timeout is 60 seconds
+    if now - ts > 60:
+        await callback.answer("Button expired.", show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            logger.exception("Failed to remove expired button")
+        return
+
+    # regenerate and send updated table (attach a fresh refresh button)
+    result = await run_sheet_operation(
+        callback.message, sheet_service.sort, worksheet_index=WorksheetIndex.QUEUE
+    )
+    if result is None:
+        return
+
+    data = await run_sheet_operation(
+        callback.message, sheet_service.get_queue, WorksheetIndex.QUEUE, "no"
+    )
+    if data is None:
+        return
+    if not data:
+        await callback.message.answer("Queue is empty")
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            logger.exception("Failed to remove old button")
+        return
+
+    table_grid = []
+
+    for item in data:
+        if not table_grid:
+            row_cells = [
+                RichBlockTableCell(
+                    text=RichTextBold(text=header), align="center", valign="middle"
+                )
+                for header in item
+            ]
+        else:
+            row_cells = [
+                RichBlockTableCell(text=cell, align="left", valign="middle")
+                for cell in item
+            ]
+        table_grid.append(row_cells)
+
+    table_block = InputRichBlockTable(cells=table_grid, is_bordered=True, is_striped=True)
+    rich_message = InputRichMessage(blocks=[table_block])
+
+    new_ts = int(time.time())
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="Refresh", callback_data=f"refresh_queue:{new_ts}"
+                )
+            ]
+        ]
+    )
+
+    try:
+        await callback.message.answer_rich(rich_message=rich_message, reply_markup=keyboard)
+    except Exception:
+        logger.exception("Failed to send refreshed table")
+        await callback.message.answer("Failed to send refreshed table.")
+        return
+
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        logger.exception("Failed to remove old button")

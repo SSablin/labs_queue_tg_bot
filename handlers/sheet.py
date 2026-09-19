@@ -62,7 +62,22 @@ async def cmd_queue(message: types.Message) -> None:
     )
 
     rich_message = InputRichMessage(blocks=[table_block])
-    await message.answer_rich(rich_message=rich_message)
+
+    # attach a refresh button that is valid for 1 minute
+    import time
+
+    ts = int(time.time())
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="Refresh", callback_data=f"refresh_queue:{ts}"
+                )
+            ]
+        ]
+    )
+
+    await message.answer_rich(rich_message=rich_message, reply_markup=keyboard)
 
 
 @router.message(Command("add_oneline"))
