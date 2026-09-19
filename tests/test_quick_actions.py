@@ -184,6 +184,10 @@ async def test_done_callback_can_update_foreign_record(monkeypatch):
     updates = []
 
     monkeypatch.setattr(
+        "keyboards.inline.sheet_service.get_record_by_id",
+        lambda worksheet, record_id: {"Name": "Bob", "Was?": QueueStatus.ACTIVE.value},
+    )
+    monkeypatch.setattr(
         "keyboards.inline.sheet_service.update_cell_by_id",
         lambda worksheet, record_id, column, value: updates.append(
             (worksheet, record_id, column, value)
@@ -207,6 +211,31 @@ async def test_done_callback_can_update_foreign_record(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_done_callback_rejects_record_that_is_no_longer_active(monkeypatch):
+    message = DummyMessage(SimpleNamespace(id=42))
+    callback = DummyCallback("done:record-1:42", message=message)
+    updates = []
+
+    monkeypatch.setattr(
+        "keyboards.inline.sheet_service.get_record_by_id",
+        lambda worksheet, record_id: {"Name": "Bob", "Was?": QueueStatus.DONE.value},
+    )
+    monkeypatch.setattr(
+        "keyboards.inline.sheet_service.update_cell_by_id",
+        lambda *args: updates.append(args),
+    )
+
+    await action_callback(callback, {})
+
+    assert updates == []
+    assert callback.answers[-1] == (
+        "This record is no longer active.",
+        {"show_alert": True},
+    )
+    assert message.edited_reply_markup == [{"reply_markup": None}]
+
+
+@pytest.mark.asyncio
 async def test_self_done_callback_rejects_foreign_record(monkeypatch):
     message = DummyMessage(SimpleNamespace(id=42))
     callback = DummyCallback("self_done:record-1:42", message=message)
@@ -219,7 +248,10 @@ async def test_self_done_callback_rejects_foreign_record(monkeypatch):
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.get_record_by_id",
-        lambda worksheet, record_id: {"Name": "Bob"},
+        lambda worksheet, record_id: {
+            "Name": "Bob",
+            "Was?": QueueStatus.ACTIVE.value,
+        },
     )
 
     await action_callback(callback, {})

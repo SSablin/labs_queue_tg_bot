@@ -17,8 +17,6 @@ from services import sheet_service
 from states.sheet import Add, Cheat, Add_oneline
 from utils.input import input_name_from_db, parse_date, parse_lab
 from utils.sheet import run_sheet_operation
-from config import SHEET_URL
-
 router = Router()
 
 logger = logging.getLogger(__name__)
@@ -343,7 +341,9 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
         await message.answer("No records found")
         return
 
-    keyboard = records_keyboard(records, "remove", message.from_user.id)
+    keyboard = records_keyboard(
+        records, "remove", message.from_user.id, refresh_action="remove"
+    )
     await message.answer("Choose the record to remove:", reply_markup=keyboard)
 
 
@@ -410,7 +410,12 @@ async def show_status_keyboard(
         await message.answer("No records found")
         return
 
-    keyboard = records_keyboard(records, callback_action, message.from_user.id)
+    keyboard = records_keyboard(
+        records,
+        callback_action,
+        message.from_user.id,
+        refresh_action=action,
+    )
     await message.answer(
         f"Choose the record to make {status_text}:", reply_markup=keyboard
     )
@@ -467,7 +472,12 @@ async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
         )
         return
 
-    keyboard = records_keyboard(records, QueueStatus.ACTIVE.value, message.from_user.id)
+    keyboard = records_keyboard(
+        records,
+        QueueStatus.ACTIVE.value,
+        message.from_user.id,
+        refresh_action="again",
+    )
     await message.answer(
         "Choose a completed record to move it back to the active queue:",
         reply_markup=keyboard,
@@ -515,7 +525,12 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
         )
         return
 
-    keyboard = records_keyboard(records, QueueStatus.ACTIVE.value, message.from_user.id)
+    keyboard = records_keyboard(
+        records,
+        QueueStatus.ACTIVE.value,
+        message.from_user.id,
+        refresh_action="rebirth",
+    )
     await message.answer(
         "Choose a record to reset it back to active status:",
         reply_markup=keyboard,

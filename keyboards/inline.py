@@ -38,7 +38,10 @@ def user_db_keyboard(user_id: int) -> types.InlineKeyboardMarkup:
 
 
 def records_keyboard(
-    records: list[list[str]], action: str, user_id: int | None = None
+    records: list[list[str]],
+    action: str,
+    user_id: int | None = None,
+    refresh_action: str | None = None,
 ) -> types.InlineKeyboardMarkup:
     buttons = []
     for cell in records:
@@ -49,6 +52,17 @@ def records_keyboard(
         if user_id is not None:
             data += f":{user_id}"
         buttons.append([types.InlineKeyboardButton(text=label, callback_data=data)])
+    if refresh_action is not None:
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text="Refresh",
+                    callback_data=(
+                        f"refresh_records:{refresh_action}:{int(time.time())}"
+                    ),
+                )
+            ]
+        )
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -210,17 +224,28 @@ async def action_callback(
         await callback.answer("Invalid button data.", show_alert=True)
         return
 
-    if action == "self_done":
-        input_name = await input_name_from_db(callback.message, dispatcher)
-        if not input_name:
-            return
+    record = None
+    if action in ("done", "self_done"):
         try:
             record = await asyncio.to_thread(
                 sheet_service.get_record_by_id, WorksheetIndex.QUEUE, record_id
             )
         except Exception:
-            logger.exception("Sheet error while checking record ownership")
+            logger.exception("Sheet error while checking record state")
             await callback.message.answer("Error checking record.")
+            return
+        if not record:
+            await callback.answer("Record not found.", show_alert=True)
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
+        if record.get("Was?") != QueueStatus.ACTIVE.value:
+            await callback.answer("This record is no longer active.", show_alert=True)
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
+
+    if action == "self_done":
+        input_name = await input_name_from_db(callback.message, dispatcher)
+        if not input_name:
             return
         if not record or record.get("Name") != input_name:
             await callback.answer("This is not your record.", show_alert=True)
@@ -417,7 +442,6 @@ async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
             logger.exception("Failed to remove old button")
-        return
 
     table_grid = []
 
@@ -461,3 +485,110 @@ async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
         logger.exception("Failed to remove old button")
+
+
+@router.callback_query(F.data.startswith("refresh_records:"))
+async def refresh_records_callback(
+    callback: types.CallbackQuery, dispatcher: Dispatcher
+) -> None:
+    if not callback.message or not callback.data or not callback.from_user:
+        logger.error("Invalid records refresh callback")
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+
+    _, view, timestamp = parts
+    try:
+        if int(time.time()) - int(timestamp) > 60:
+            await callback.answer("Button expired.", show_alert=True)
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
+    except ValueError:
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+
+    try:
+        await asyncio.to_thread(sheet_service.sort, WorksheetIndex.QUEUE)
+        input_name = None
+        if view in {"remove", "self_done", "again", "rebirth"}:
+            input_name = await input_name_from_db(callback.message, dispatcher)
+            if not input_name:
+                return
+
+        if view == "remove":
+            records = await asyncio.to_thread(
+                sheet_service.find_records, WorksheetIndex.QUEUE, input_name
+            )
+            action = "remove"
+        elif view == "done":
+            records = await asyncio.to_thread(
+                sheet_service.get_queue_records,
+                WorksheetIndex.QUEUE,
+                QueueStatus.ACTIVE.value,
+            )
+            action = "done"
+        elif view == "self_done":
+            records = await asyncio.to_thread(
+                sheet_service.get_queue_records,
+                WorksheetIndex.QUEUE,
+                QueueStatus.ACTIVE.value,
+                None,
+                input_name,
+            )
+            action = "self_done"
+        elif view == "missed":
+            records = await asyncio.to_thread(
+                sheet_service.get_queue_records,
+                WorksheetIndex.QUEUE,
+                QueueStatus.ACTIVE.value,
+            )
+            action = "missed"
+        elif view == "recover":
+            records = await asyncio.to_thread(
+                sheet_service.get_queue_records,
+                WorksheetIndex.QUEUE,
+                None,
+                QueueStatus.ACTIVE.value,
+            )
+            action = QueueStatus.ACTIVE.value
+        elif view == "again":
+            records = await asyncio.to_thread(
+                sheet_service.get_queue_records,
+                WorksheetIndex.QUEUE,
+                QueueStatus.DONE.value,
+                None,
+                input_name,
+            )
+            action = QueueStatus.ACTIVE.value
+        elif view == "rebirth":
+            records = await asyncio.to_thread(
+                sheet_service.get_queue_records,
+                WorksheetIndex.QUEUE,
+                None,
+                QueueStatus.ACTIVE.value,
+                input_name,
+            )
+            action = QueueStatus.ACTIVE.value
+        else:
+            await callback.answer("Invalid button data.", show_alert=True)
+            return
+
+        if not records:
+            await callback.answer("No records found.", show_alert=True)
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
+
+        keyboard = records_keyboard(
+            records,
+            action,
+            callback.from_user.id,
+            refresh_action=view,
+        )
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+        await callback.answer("List refreshed.")
+    except Exception:
+        logger.exception("Error while refreshing records list: %s", view)
+        await callback.message.answer("Failed to refresh records.")
