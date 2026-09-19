@@ -12,7 +12,7 @@ from aiogram.types import (
     RichTextBold,
 )
 
-from constants.enums import QueueColumn, WorksheetIndex
+from constants.enums import QueueColumn, QueueStatus, WorksheetIndex
 from services import sheet_service
 from states.start import Start
 from utils.fsm import clear_fsm_logic
@@ -120,7 +120,9 @@ async def user_id_callback_handler(
 
 
 @router.callback_query(F.data.startswith("remove:"))
-async def remove_callback(callback: types.CallbackQuery) -> None:
+async def remove_callback(
+    callback: types.CallbackQuery, dispatcher: Dispatcher
+) -> None:
     await callback.answer()
     if not callback.message:
         logger.error("No callback message")
@@ -145,7 +147,17 @@ async def remove_callback(callback: types.CallbackQuery) -> None:
         await callback.answer("Invalid button data.", show_alert=True)
         return
 
+    input_name = await input_name_from_db(callback.message, dispatcher)
+    if not input_name:
+        return
+
     try:
+        record = await asyncio.to_thread(
+            sheet_service.get_record_by_id, WorksheetIndex.QUEUE, record_id
+        )
+        if not record or record.get("Name") != input_name:
+            await callback.answer("This is not your record.", show_alert=True)
+            return
         deleted = await asyncio.to_thread(
             sheet_service.delete_record_by_id, WorksheetIndex.QUEUE, record_id
         )
@@ -320,7 +332,7 @@ async def quick_record_action_callback(
             updates.append((QueueColumn.DATE, current_date))
             updates.append((QueueColumn.TIME, current_time))
         elif action == "quick_done":
-            updates.append((QueueColumn.WAS, "done"))
+            updates.append((QueueColumn.WAS, QueueStatus.DONE.value))
             updates.append((QueueColumn.DATE, current_date))
             updates.append((QueueColumn.TIME, current_time))
         else:
@@ -389,7 +401,10 @@ async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
         return
 
     data = await run_sheet_operation(
-        callback.message, sheet_service.get_queue, WorksheetIndex.QUEUE, "no"
+        callback.message,
+        sheet_service.get_queue,
+        WorksheetIndex.QUEUE,
+        QueueStatus.ACTIVE.value,
     )
     if data is None:
         return

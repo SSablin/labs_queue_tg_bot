@@ -1,4 +1,4 @@
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 
 class WorksheetIndex(IntEnum):
@@ -14,3 +14,9 @@ class QueueColumn(IntEnum):
     LAB = 4
     WAS = 5
     RECORD_ID = 6
+
+
+class QueueStatus(str, Enum):
+    ACTIVE = "no"
+    DONE = "done"
+    MISSED = "missed"

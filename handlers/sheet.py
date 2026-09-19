@@ -11,7 +11,7 @@ from aiogram.types import (
     RichTextBold,
 )
 
-from constants.enums import WorksheetIndex
+from constants.enums import QueueStatus, WorksheetIndex
 from keyboards.inline import cancel_keyboard, own_queue_keyboard, records_keyboard
 from services import sheet_service
 from states.sheet import Add, Cheat, Add_oneline
@@ -32,7 +32,10 @@ async def cmd_queue(message: types.Message, dispatcher: Dispatcher) -> None:
         return
 
     data = await run_sheet_operation(
-        message, sheet_service.get_queue, WorksheetIndex.QUEUE, "no"
+        message,
+        sheet_service.get_queue,
+        WorksheetIndex.QUEUE,
+        QueueStatus.ACTIVE.value,
     )
     if data is None:
         return
@@ -83,7 +86,7 @@ async def cmd_queue(message: types.Message, dispatcher: Dispatcher) -> None:
             message,
             sheet_service.get_queue_records,
             worksheet_index=WorksheetIndex.QUEUE,
-            was="no",
+            was=QueueStatus.ACTIVE.value,
             input_name=input_name,
         )
         if own_records:
@@ -137,7 +140,7 @@ async def on_input_one_line_text(message: types.Message, state: FSMContext):
     input_name = data.get("input_name")
     lab = data.get("lab")
 
-    record = [input_name, date["date"], date["time"], lab, "no"]
+    record = [input_name, date["date"], date["time"], lab, QueueStatus.ACTIVE.value]
 
     result = await run_sheet_operation(
         message,
@@ -233,7 +236,7 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
     lab = data.get("lab")
     date = data.get("date")
 
-    record = [input_name, date, input_time, lab, "no"]
+    record = [input_name, date, input_time, lab, QueueStatus.ACTIVE.value]
 
     result = await run_sheet_operation(
         message,
@@ -365,7 +368,7 @@ async def show_status_keyboard(
             message,
             sheet_service.get_queue_records,
             worksheet_index=WorksheetIndex.QUEUE,
-            was="no",
+            was=QueueStatus.ACTIVE.value,
             input_name=input_name,
         )
         status_text = action
@@ -374,7 +377,7 @@ async def show_status_keyboard(
             message,
             sheet_service.get_queue_records,
             worksheet_index=WorksheetIndex.QUEUE,
-            was="no",
+            was=QueueStatus.ACTIVE.value,
         )
         status_text = action
     elif action == "recover":
@@ -382,9 +385,9 @@ async def show_status_keyboard(
             message,
             sheet_service.get_queue_records,
             worksheet_index=WorksheetIndex.QUEUE,
-            was_not="no",
+            was_not=QueueStatus.ACTIVE.value,
         )
-        status_text = "no"
+        status_text = QueueStatus.ACTIVE.value
     else:
         return
 
@@ -435,7 +438,7 @@ async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
         message,
         sheet_service.get_queue_records,
         worksheet_index=WorksheetIndex.QUEUE,
-        was="done",
+        was=QueueStatus.DONE.value,
         input_name=input_name,
     )
     if records is None:
@@ -446,7 +449,9 @@ async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
         )
         return
 
-    keyboard = records_keyboard(records, "no", message.from_user.id)
+    keyboard = records_keyboard(
+        records, QueueStatus.ACTIVE.value, message.from_user.id
+    )
     await message.answer(
         "Choose a completed record to move it back to the active queue:",
         reply_markup=keyboard,
@@ -483,7 +488,7 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
         message,
         sheet_service.get_queue_records,
         worksheet_index=WorksheetIndex.QUEUE,
-        was_not="no",
+        was_not=QueueStatus.ACTIVE.value,
         input_name=input_name,
     )
     if records is None:
@@ -494,7 +499,9 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
         )
         return
 
-    keyboard = records_keyboard(records, "no", message.from_user.id)
+    keyboard = records_keyboard(
+        records, QueueStatus.ACTIVE.value, message.from_user.id
+    )
     await message.answer(
         "Choose a record to reset it back to active status:",
         reply_markup=keyboard,
