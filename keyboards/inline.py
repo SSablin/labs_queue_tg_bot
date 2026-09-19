@@ -178,6 +178,7 @@ async def remove_callback(
 
 
 @router.callback_query(F.data.startswith("done:"))
+@router.callback_query(F.data.startswith("self_done:"))
 @router.callback_query(F.data.startswith("missed:"))
 @router.callback_query(F.data.startswith("no:"))
 async def action_callback(
@@ -209,7 +210,7 @@ async def action_callback(
         await callback.answer("Invalid button data.", show_alert=True)
         return
 
-    if action == "done":
+    if action == "self_done":
         input_name = await input_name_from_db(callback.message, dispatcher)
         if not input_name:
             return
@@ -225,13 +226,15 @@ async def action_callback(
             await callback.answer("This is not your record.", show_alert=True)
             return
 
+    update_status = QueueStatus.DONE.value if action == "self_done" else action
+
     try:
         updated = await asyncio.to_thread(
             sheet_service.update_cell_by_id,
             WorksheetIndex.QUEUE,
             record_id,
             QueueColumn.WAS,
-            action,
+            update_status,
         )
         if not updated:
             await callback.message.edit_reply_markup(reply_markup=None)
@@ -242,7 +245,7 @@ async def action_callback(
         await callback.message.answer("Error updating record.")
         return
 
-    if action == "done":
+    if update_status == QueueStatus.DONE.value:
         current_date, current_time = get_current_sheet_datetime()
         try:
             updated = await asyncio.to_thread(
@@ -274,14 +277,14 @@ async def action_callback(
 
     try:
         await callback.message.edit_text(
-            f"Status was updated to <b>{action}</b>.",
+            f"Status was updated to <b>{update_status}</b>.",
             reply_markup=None,
             parse_mode="HTML",
         )
     except Exception as e:
         await callback.answer("Failed to edit the message")
         await callback.message.answer(
-            f"Status was updated to <b>{action}</b>.",
+            f"Status was updated to <b>{update_status}</b>.",
             parse_mode="HTML",
         )
 

@@ -118,7 +118,8 @@ async def cmd_help(message: types.Message):
 • /queue — open the current queue and sort records.
 • /add — create a new queue record step by step: lab number, date, and time.
 • /remove — select a queue record from the list and remove it.
-• /done — select a queue record and mark it as done.
+• /done — select any active queue record and mark it as done.
+• /self_done — select one of your active records and mark it as done.
 • /missed — select a queue record and mark it as missed.
 • /recover — select a finished or missed record and return it to the active queue.
 • /again — select your own completed record and return it to the active queue.

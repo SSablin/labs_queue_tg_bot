@@ -349,14 +349,14 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
 async def show_status_keyboard(
     message: types.Message, action: str, dispatcher: Dispatcher | None = None
 ):
-    # action: "done", "missed", "recover"
+    # action: "done", "self_done", "missed", "recover"
     result = await run_sheet_operation(
         message, sheet_service.sort, WorksheetIndex.QUEUE
     )
     if result is None:
         return
 
-    if action == "done":
+    if action == "self_done":
         if dispatcher is None:
             logger.error("Dispatcher is required for the done action")
             await message.answer("Unable to load your records.")
@@ -371,6 +371,16 @@ async def show_status_keyboard(
             was=QueueStatus.ACTIVE.value,
             input_name=input_name,
         )
+        callback_action = action
+        status_text = QueueStatus.DONE.value
+    elif action == "done":
+        records = await run_sheet_operation(
+            message,
+            sheet_service.get_queue_records,
+            worksheet_index=WorksheetIndex.QUEUE,
+            was=QueueStatus.ACTIVE.value,
+        )
+        callback_action = action
         status_text = action
     elif action == "missed":
         records = await run_sheet_operation(
@@ -379,6 +389,7 @@ async def show_status_keyboard(
             worksheet_index=WorksheetIndex.QUEUE,
             was=QueueStatus.ACTIVE.value,
         )
+        callback_action = action
         status_text = action
     elif action == "recover":
         records = await run_sheet_operation(
@@ -387,6 +398,7 @@ async def show_status_keyboard(
             worksheet_index=WorksheetIndex.QUEUE,
             was_not=QueueStatus.ACTIVE.value,
         )
+        callback_action = action
         status_text = QueueStatus.ACTIVE.value
     else:
         return
@@ -397,7 +409,7 @@ async def show_status_keyboard(
         await message.answer("No records found")
         return
 
-    keyboard = records_keyboard(records, status_text, message.from_user.id)
+    keyboard = records_keyboard(records, callback_action, message.from_user.id)
     await message.answer(
         f"Choose the record to make {status_text}:", reply_markup=keyboard
     )
@@ -406,6 +418,11 @@ async def show_status_keyboard(
 @router.message(Command("done"))
 async def cmd_done(message: types.Message, dispatcher: Dispatcher) -> None:
     await show_status_keyboard(message, "done", dispatcher)
+
+
+@router.message(Command("self_done"))
+async def cmd_self_done(message: types.Message, dispatcher: Dispatcher) -> None:
+    await show_status_keyboard(message, "self_done", dispatcher)
 
 
 @router.message(Command("missed"))
