@@ -12,7 +12,7 @@ from aiogram.types import (
 )
 
 from constants.enums import WorksheetIndex
-from keyboards.inline import cancel_keyboard, records_keyboard
+from keyboards.inline import cancel_keyboard, own_queue_keyboard, records_keyboard
 from services import sheet_service
 from states.sheet import Add, Cheat, Add_oneline
 from utils.input import input_name_from_db, parse_date, parse_lab
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.message(Command("queue"))
-async def cmd_queue(message: types.Message) -> None:
+async def cmd_queue(message: types.Message, dispatcher: Dispatcher) -> None:
     result = await run_sheet_operation(
         message, sheet_service.sort, worksheet_index=WorksheetIndex.QUEUE
     )
@@ -76,6 +76,20 @@ async def cmd_queue(message: types.Message) -> None:
             ]
         ]
     )
+
+    input_name = await input_name_from_db(message, dispatcher)
+    if input_name and message.from_user:
+        own_records = await run_sheet_operation(
+            message,
+            sheet_service.get_queue_records,
+            worksheet_index=WorksheetIndex.QUEUE,
+            was="no",
+            input_name=input_name,
+        )
+        if own_records:
+            keyboard.inline_keyboard.extend(
+                own_queue_keyboard(own_records, message.from_user.id).inline_keyboard
+            )
 
     await message.answer_rich(rich_message=rich_message, reply_markup=keyboard)
 
@@ -329,7 +343,9 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
     await message.answer("Choose the record to remove:", reply_markup=keyboard)
 
 
-async def show_status_keyboard(message, action):
+async def show_status_keyboard(
+    message: types.Message, action: str, dispatcher: Dispatcher | None = None
+):
     # action: "done", "missed", "recover"
     result = await run_sheet_operation(
         message, sheet_service.sort, WorksheetIndex.QUEUE
@@ -337,7 +353,23 @@ async def show_status_keyboard(message, action):
     if result is None:
         return
 
-    if action in ("done", "missed"):
+    if action == "done":
+        if dispatcher is None:
+            logger.error("Dispatcher is required for the done action")
+            await message.answer("Unable to load your records.")
+            return
+        input_name = await input_name_from_db(message, dispatcher)
+        if not input_name:
+            return
+        records = await run_sheet_operation(
+            message,
+            sheet_service.get_queue_records,
+            worksheet_index=WorksheetIndex.QUEUE,
+            was="no",
+            input_name=input_name,
+        )
+        status_text = action
+    elif action == "missed":
         records = await run_sheet_operation(
             message,
             sheet_service.get_queue_records,
@@ -369,8 +401,8 @@ async def show_status_keyboard(message, action):
 
 
 @router.message(Command("done"))
-async def cmd_done(message: types.Message) -> None:
-    await show_status_keyboard(message, "done")
+async def cmd_done(message: types.Message, dispatcher: Dispatcher) -> None:
+    await show_status_keyboard(message, "done", dispatcher)
 
 
 @router.message(Command("missed"))

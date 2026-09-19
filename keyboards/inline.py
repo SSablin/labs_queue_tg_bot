@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 import time
 
-from aiogram import F, Router, types
+from aiogram import Dispatcher, F, Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     InputRichBlockTable,
@@ -16,6 +16,7 @@ from constants.enums import QueueColumn, WorksheetIndex
 from services import sheet_service
 from states.start import Start
 from utils.fsm import clear_fsm_logic
+from utils.input import input_name_from_db
 from utils.sheet import run_sheet_operation
 
 router = Router()
@@ -49,6 +50,28 @@ def records_keyboard(
             data += f":{user_id}"
         buttons.append([types.InlineKeyboardButton(text=label, callback_data=data)])
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def own_queue_keyboard(
+    records: list[list[str]], user_id: int
+) -> types.InlineKeyboardMarkup:
+    rows = []
+    for cell in records:
+        record_id = cell[4]
+        label = f"№{cell[0]}: {cell[1]} (lab.{cell[2]})"
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"{label} — сейчас",
+                    callback_data=f"quick_time:{record_id}:{user_id}",
+                ),
+                types.InlineKeyboardButton(
+                    text="done",
+                    callback_data=f"quick_done:{record_id}:{user_id}",
+                ),
+            ]
+        )
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_current_sheet_datetime() -> tuple[str, str]:
@@ -145,7 +168,9 @@ async def remove_callback(callback: types.CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("done:"))
 @router.callback_query(F.data.startswith("missed:"))
 @router.callback_query(F.data.startswith("no:"))
-async def action_callback(callback: types.CallbackQuery) -> None:
+async def action_callback(
+    callback: types.CallbackQuery, dispatcher: Dispatcher
+) -> None:
     await callback.answer()
 
     if not callback.message:
@@ -171,6 +196,22 @@ async def action_callback(callback: types.CallbackQuery) -> None:
     else:
         await callback.answer("Invalid button data.", show_alert=True)
         return
+
+    if action == "done":
+        input_name = await input_name_from_db(callback.message, dispatcher)
+        if not input_name:
+            return
+        try:
+            record = await asyncio.to_thread(
+                sheet_service.get_record_by_id, WorksheetIndex.QUEUE, record_id
+            )
+        except Exception:
+            logger.exception("Sheet error while checking record ownership")
+            await callback.message.answer("Error checking record.")
+            return
+        if not record or record.get("Name") != input_name:
+            await callback.answer("This is not your record.", show_alert=True)
+            return
 
     try:
         updated = await asyncio.to_thread(
@@ -231,6 +272,79 @@ async def action_callback(callback: types.CallbackQuery) -> None:
             f"Status was updated to <b>{action}</b>.",
             parse_mode="HTML",
         )
+
+
+@router.callback_query(F.data.startswith("quick_time:"))
+@router.callback_query(F.data.startswith("quick_done:"))
+async def quick_record_action_callback(
+    callback: types.CallbackQuery, dispatcher: Dispatcher
+) -> None:
+    if not callback.message or not callback.data or not callback.from_user:
+        logger.error("Invalid quick record callback")
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+
+    action, record_id, user_id_str = parts
+    try:
+        button_user_id = int(user_id_str)
+    except ValueError:
+        await callback.answer("Invalid button data.", show_alert=True)
+        return
+    if button_user_id != callback.from_user.id:
+        await callback.answer("You cannot do that.", show_alert=True)
+        return
+
+    input_name = await input_name_from_db(callback.message, dispatcher)
+    if not input_name:
+        return
+
+    try:
+        record = await asyncio.to_thread(
+            sheet_service.get_record_by_id, WorksheetIndex.QUEUE, record_id
+        )
+        if not record:
+            await callback.answer("Record not found.", show_alert=True)
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
+        if record.get("Name") != input_name:
+            await callback.answer("This is not your record.", show_alert=True)
+            return
+
+        current_date, current_time = get_current_sheet_datetime()
+        updates = []
+        if action == "quick_time":
+            updates.append((QueueColumn.DATE, current_date))
+            updates.append((QueueColumn.TIME, current_time))
+        elif action == "quick_done":
+            updates.append((QueueColumn.WAS, "done"))
+            updates.append((QueueColumn.DATE, current_date))
+            updates.append((QueueColumn.TIME, current_time))
+        else:
+            await callback.answer("Invalid button data.", show_alert=True)
+            return
+
+        for column, value in updates:
+            updated = await asyncio.to_thread(
+                sheet_service.update_cell_by_id,
+                WorksheetIndex.QUEUE,
+                record_id,
+                column,
+                value,
+            )
+            if not updated:
+                await callback.answer("Record not found.", show_alert=True)
+                return
+    except Exception:
+        logger.exception("Sheet error while applying quick record action")
+        await callback.message.answer("Error updating record.")
+        return
+
+    await callback.answer("Updated")
+    await callback.message.edit_reply_markup(reply_markup=None)
 
 
 @router.callback_query(F.data.startswith("refresh_queue:"))
