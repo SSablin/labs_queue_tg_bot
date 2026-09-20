@@ -1,5 +1,5 @@
-import uuid
 import logging
+import uuid
 from typing import Optional
 
 from constants.enums import QueueColumn
@@ -17,7 +17,9 @@ class SheetService:
     def __init__(self, spreadsheet):
         self.spreadsheet = spreadsheet
 
-    def get_queue(self, worksheet_index: int, was: str | None = None) -> list[list[str]]:
+    def get_queue(
+        self, worksheet_index: int, was: str | None = None
+    ) -> list[list[str]]:
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
         data = worksheet.get_all_records()
         headers = ["№", "Name", "Date", "Time", "Lab", "Was?"]
@@ -25,14 +27,16 @@ class SheetService:
 
         for i, row in enumerate(data):
             if was is None or row.get("Was?") == was:
-                rows.append([
-                    str(i + 1),
-                    str(row.get("Name", "")),
-                    str(row.get("Date", "")),
-                    str(row.get("Time", "")),
-                    str(row.get("Lab", "")),
-                    str(row.get("Was?", "")),
-                ])
+                rows.append(
+                    [
+                        str(i + 1),
+                        str(row.get("Name", "")),
+                        str(row.get("Date", "")),
+                        str(row.get("Time", "")),
+                        str(row.get("Lab", "")),
+                        str(row.get("Was?", "")),
+                    ]
+                )
 
         return rows
 
@@ -67,13 +71,15 @@ class SheetService:
                 and (was_not is None or was_not != row.get("Was?"))
                 and (input_name is None or input_name == row.get("Name"))
             ):
-                rows.append([
-                    str(i + 1),
-                    str(row.get("Name", "")),
-                    str(row.get("Lab", "")),
-                    str(row.get("Was?", "")),
-                    str(row.get("record_id", "")),
-                ])
+                rows.append(
+                    [
+                        str(i + 1),
+                        str(row.get("Name", "")),
+                        str(row.get("Lab", "")),
+                        str(row.get("Was?", "")),
+                        str(row.get("record_id", "")),
+                    ]
+                )
         return rows
 
     def add_record(
@@ -99,18 +105,22 @@ class SheetService:
             if row.get("Name") == name:
                 if row.get("record_id", ""):
                     if lab is None or row.get("Lab") == str(lab):
-                        rows.append([
-                            str(i + 1),
-                            str(row.get("Name", "")),
-                            str(row.get("Lab", "")),
-                            str(row.get("Was?", "")),
-                            str(row.get("record_id", "")),
-                        ])
+                        rows.append(
+                            [
+                                str(i + 1),
+                                str(row.get("Name", "")),
+                                str(row.get("Lab", "")),
+                                str(row.get("Was?", "")),
+                                str(row.get("record_id", "")),
+                            ]
+                        )
                 else:
                     logger.warning("No record_id in row: %s", row)
         return rows
 
-    def update_record(self, worksheet_index: int, row_number: int, values: list[list[int | str]]) -> None:
+    def update_record(
+        self, worksheet_index: int, row_number: int, values: list[list[int | str]]
+    ) -> None:
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
         worksheet.update(values=values, range_name=f"A{row_number}")
 
@@ -143,7 +153,9 @@ class SheetService:
         worksheet.delete_rows(row_number)
         return True
 
-    def update_cell_by_id(self, worksheet_index: int, record_id: str, col_number: int, value) -> bool:
+    def update_cell_by_id(
+        self, worksheet_index: int, record_id: str, col_number: int, value
+    ) -> bool:
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
         row_number = self._find_row_number_by_record_id(worksheet, record_id)
         if row_number is None:
@@ -166,14 +178,16 @@ class SheetService:
             if row.get("Was?") != "no":
                 return "inactive"
             row_number = i + 2
-            values = [[
-                row.get("Name", ""),
-                date,
-                time,
-                row.get("Lab", ""),
-                "done",
-                row.get("record_id", ""),
-            ]]
+            values = [
+                [
+                    row.get("Name", ""),
+                    date,
+                    time,
+                    row.get("Lab", ""),
+                    "done",
+                    row.get("record_id", ""),
+                ]
+            ]
             worksheet.update(
                 values=values,
                 range_name=f"A{row_number}:F{row_number}",
@@ -213,7 +227,9 @@ def init_service(spreadsheet, sheet_url: str | None = None):
 
 def _ensure_service():
     if _service is None:
-        raise RuntimeError("SheetService is not initialized. Call init_service(spreadsheet) in application startup.")
+        raise RuntimeError(
+            "SheetService is not initialized. Call init_service(spreadsheet) in application startup."
+        )
 
 
 def get_queue(worksheet_index: int, was: str | None = None) -> list[list[str]]:
@@ -221,9 +237,16 @@ def get_queue(worksheet_index: int, was: str | None = None) -> list[list[str]]:
     return _service.get_queue(worksheet_index, was)
 
 
-def get_queue_records(worksheet_index: int, was: str | None = None, was_not: str | None = None, input_name: str | None = None) -> list[list[str]]:
+def get_queue_records(
+    worksheet_index: int,
+    was: str | None = None,
+    was_not: str | None = None,
+    input_name: str | None = None,
+) -> list[list[str]]:
     _ensure_service()
-    return _service.get_queue_records(worksheet_index, was=was, was_not=was_not, input_name=input_name)
+    return _service.get_queue_records(
+        worksheet_index, was=was, was_not=was_not, input_name=input_name
+    )
 
 
 def add_record(worksheet_index: int, record: list, add_uuid: bool = False) -> None:
@@ -235,12 +258,16 @@ def add_record(worksheet_index: int, record: list, add_uuid: bool = False) -> No
     )
 
 
-def find_records(worksheet_index: int, name: str, lab: int | None = None) -> list[list[str]]:
+def find_records(
+    worksheet_index: int, name: str, lab: int | None = None
+) -> list[list[str]]:
     _ensure_service()
     return _service.find_records(worksheet_index, name, lab)
 
 
-def update_record(worksheet_index: int, row_number: int, values: list[list[int | str]]) -> None:
+def update_record(
+    worksheet_index: int, row_number: int, values: list[list[int | str]]
+) -> None:
     _ensure_service()
     return _service.update_record(worksheet_index, row_number, values)
 
@@ -260,7 +287,9 @@ def delete_record_by_id(worksheet_index: int, record_id: str) -> bool:
     return _service.delete_record_by_id(worksheet_index, record_id)
 
 
-def update_cell_by_id(worksheet_index: int, record_id: str, col_number: int, value) -> bool:
+def update_cell_by_id(
+    worksheet_index: int, record_id: str, col_number: int, value
+) -> bool:
     _ensure_service()
     return _service.update_cell_by_id(worksheet_index, record_id, col_number, value)
 

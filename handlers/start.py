@@ -95,10 +95,16 @@ async def input_name(
     data = await state.get_data()
     if data.get("is_name_change"):
         msg = "Name updated successfully!"
-        logger.info("User %s successfully updated name: %s", message.from_user.id, input_name)
+        logger.info(
+            "User %s successfully updated name: %s", message.from_user.id, input_name
+        )
     else:
         msg = f"Your name in table is {input_name}!"
-        logger.info("User %s successfully added to db, name: %s", message.from_user.id, input_name)
+        logger.info(
+            "User %s successfully added to db, name: %s",
+            message.from_user.id,
+            input_name,
+        )
 
     await message.answer(msg, reply_markup=keyboard)
     await state.clear()
