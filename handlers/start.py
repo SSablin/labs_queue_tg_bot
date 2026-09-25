@@ -123,6 +123,7 @@ async def cmd_help(message: types.Message):
 <b>2. Queue actions</b>
 • /queue — open the current queue and sort records.
 • /add — create a new queue record step by step: lab number, date, and time.
+• /add_oneline — create a new queue record by oneline from gilab.
 • /remove — select a queue record from the list and remove it.
 • /done — select any active queue record and mark it as done.
 • /self_done — select one of your active records and mark it as done.
