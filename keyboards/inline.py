@@ -1,9 +1,10 @@
 import asyncio
 import logging
-from datetime import datetime
 import time
+from datetime import datetime
 
 from aiogram import Dispatcher, F, Router, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     InputRichBlockTable,
@@ -90,7 +91,7 @@ def own_queue_keyboard(
 
 def get_current_sheet_datetime() -> tuple[str, str]:
     now = datetime.now()
-    return now.strftime("%d.%m.%Y"), now.strftime("%H:%M")
+    return now.strftime("%d.%m.%Y"), now.strftime("%H:%M:%S")
 
 
 @router.callback_query(F.data == "cancel_fsm")
@@ -164,7 +165,7 @@ async def remove_callback(
         record = await asyncio.to_thread(
             sheet_service.get_record_by_id, WorksheetIndex.QUEUE, record_id
         )
-        if not record or record.get("Name") != input_name:
+        if not record:
             await callback.answer("This is not your record.", show_alert=True)
             return
         deleted = await asyncio.to_thread(
@@ -193,7 +194,7 @@ async def remove_callback(
 async def action_callback(
     callback: types.CallbackQuery, dispatcher: Dispatcher
 ) -> None:
-    if not callback.message:
+    if not isinstance(callback.message, types.Message):
         logger.error("No callback message")
         return
 
@@ -236,14 +237,6 @@ async def action_callback(
             await callback.message.edit_reply_markup(reply_markup=None)
             return
 
-    if action == "self_done":
-        input_name = await input_name_from_db(callback.message, dispatcher)
-        if not input_name:
-            return
-        if not record or record.get("Name") != input_name:
-            await callback.answer("This is not your record.", show_alert=True)
-            return
-
     update_status = QueueStatus.DONE.value if action == "self_done" else action
 
     if update_status == QueueStatus.DONE.value:
@@ -262,7 +255,9 @@ async def action_callback(
                 return
             if result == "inactive":
                 await callback.message.edit_reply_markup(reply_markup=None)
-                await callback.answer("This record is no longer active.", show_alert=True)
+                await callback.answer(
+                    "This record is no longer active.", show_alert=True
+                )
                 return
         except Exception:
             logger.exception("Sheet error while completing record")
@@ -293,7 +288,7 @@ async def action_callback(
             parse_mode="HTML",
         )
         await callback.answer("Updated")
-    except Exception:
+    except TelegramBadRequest:
         await callback.answer("Failed to edit the message")
         await callback.message.answer(
             f"Status was updated to <b>{update_status}</b>.",
@@ -349,7 +344,9 @@ async def quick_record_action_callback(
             ]
         elif action == "quick_done":
             if record.get("Was?") != QueueStatus.ACTIVE.value:
-                await callback.answer("This record is no longer active.", show_alert=True)
+                await callback.answer(
+                    "This record is no longer active.", show_alert=True
+                )
                 await callback.message.edit_reply_markup(reply_markup=None)
                 return
             result = await asyncio.to_thread(
@@ -363,7 +360,9 @@ async def quick_record_action_callback(
                 await callback.answer("Record not found.", show_alert=True)
                 return
             if result == "inactive":
-                await callback.answer("This record is no longer active.", show_alert=True)
+                await callback.answer(
+                    "This record is no longer active.", show_alert=True
+                )
                 await callback.message.edit_reply_markup(reply_markup=None)
                 return
             updates = []
@@ -464,7 +463,9 @@ async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
             ]
         table_grid.append(row_cells)
 
-    table_block = InputRichBlockTable(cells=table_grid, is_bordered=True, is_striped=True)
+    table_block = InputRichBlockTable(
+        cells=table_grid, is_bordered=True, is_striped=True
+    )
     rich_message = InputRichMessage(blocks=[table_block])
 
     new_ts = int(time.time())
@@ -479,7 +480,9 @@ async def refresh_queue_callback(callback: types.CallbackQuery) -> None:
     )
 
     try:
-        await callback.message.answer_rich(rich_message=rich_message, reply_markup=keyboard)
+        await callback.message.answer_rich(
+            rich_message=rich_message, reply_markup=keyboard
+        )
     except Exception:
         logger.exception("Failed to send refreshed table")
         await callback.message.answer("Failed to send refreshed table.")
@@ -518,7 +521,7 @@ async def refresh_records_callback(
     try:
         await asyncio.to_thread(sheet_service.sort, WorksheetIndex.QUEUE)
         input_name = None
-        if view in {"remove", "self_done", "again", "rebirth"}:
+        if view in {"remove", "self_done", "again", "self_no"}:
             input_name = await input_name_from_db(callback.message, dispatcher)
             if not input_name:
                 return
@@ -551,7 +554,7 @@ async def refresh_records_callback(
                 QueueStatus.ACTIVE.value,
             )
             action = "missed"
-        elif view == "recover":
+        elif view == "no":
             records = await asyncio.to_thread(
                 sheet_service.get_queue_records,
                 WorksheetIndex.QUEUE,
@@ -568,7 +571,7 @@ async def refresh_records_callback(
                 input_name,
             )
             action = QueueStatus.ACTIVE.value
-        elif view == "rebirth":
+        elif view == "self_no":
             records = await asyncio.to_thread(
                 sheet_service.get_queue_records,
                 WorksheetIndex.QUEUE,
