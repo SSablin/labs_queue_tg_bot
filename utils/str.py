@@ -14,7 +14,7 @@ months = {
 }
 
 
-async def parse_str_date(input_text: str) -> dict[str, str] | None:
+def parse_str_date(input_text: str) -> dict[str, str] | None:
     if not input_text:
         return None
 
@@ -45,4 +45,4 @@ async def parse_str_date(input_text: str) -> dict[str, str] | None:
             hour = 0
         time = f"{hour}:{minute:02d}:{second:02d}"
 
-    return {"date": f"{day:02d}.{month:02d}.{year:04d}", "time": f"{time}"}
+    return {"Date": f"{day:02d}.{month:02d}.{year:04d}", "Time": f"{time}"}

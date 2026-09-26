@@ -119,10 +119,23 @@ class SheetService:
         return rows
 
     def update_record(
-        self, worksheet_index: int, row_number: int, values: list[list[int | str]]
+        self,
+        worksheet_index: int,
+        values: list[list[int | str]],
+        row_number: int | None = None,
+        record_id: str | None = None,
     ) -> None:
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
-        worksheet.update(values=values, range_name=f"A{row_number}")
+        if not row_number and record_id:
+            row_number = self._find_row_number_by_record_id(worksheet, record_id)
+        elif not row_number and not record_id:
+            return
+
+        worksheet.update(
+            values=values,
+            range_name=f"A{row_number}",
+            value_input_option="USER_ENTERED",
+        )
 
     def add_tip(self, worksheet_index: int, name: str, lab: int, tip: str) -> None:
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
@@ -191,6 +204,7 @@ class SheetService:
             worksheet.update(
                 values=values,
                 range_name=f"A{row_number}:F{row_number}",
+                value_input_option="USER_ENTERED",
             )
             return "updated"
         return "not_found"
@@ -266,10 +280,15 @@ def find_records(
 
 
 def update_record(
-    worksheet_index: int, row_number: int, values: list[list[int | str]]
+    worksheet_index: int,
+    values: list[list[int | str]],
+    row_number: int | None = None,
+    record_id: str | None = None,
 ) -> None:
     _ensure_service()
-    return _service.update_record(worksheet_index, row_number, values)
+    return _service.update_record(
+        worksheet_index, values, row_number=row_number, record_id=record_id
+    )
 
 
 def add_tip(worksheet_index: int, name: str, lab: int, tip: str) -> None:

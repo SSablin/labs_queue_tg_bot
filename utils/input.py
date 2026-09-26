@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiogram import Dispatcher, types
@@ -61,4 +62,4 @@ async def parse_date(message: types.Message) -> dict[str, str] | None:
         await message.answer("Data can not be empty. Try again.")
         return None
 
-    return await parse_str_date(input_text)
+    return await asyncio.to_thread(parse_str_date, input_text)

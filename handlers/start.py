@@ -123,15 +123,14 @@ async def cmd_help(message: types.Message):
 <b>2. Queue actions</b>
 • /queue — open the current queue and sort records.
 • /add — create a new queue record step by step: lab number, date, and time.
-• /add_oneline — create a new queue record by oneline from gilab.
+    • /add_oneline — create a new queue record by oneline from gilab.
 • /remove — select a queue record from the list and remove it.
 • /done — select any active queue record and mark it as done.
-• /self_done — select one of your active records and mark it as done.
+    • /self_done — select one of your active records and mark it as done.
 • /missed — select a queue record and mark it as missed.
-• /recover — select a finished or missed record and return it to the active queue.
-• /again — select your own completed record and return it to the active queue.
+• /no — select a finished or missed record and return it to the active queue.
+    • /self_no — reset your own record status back to active ("no").
 • /cheat — create a cheat record step by step.
-• /rebirth — reset your own record status back to active ("no").
 
 <b>3. Sheet and utilities</b>
 • /sheet — open the Google Sheet link.

@@ -110,7 +110,7 @@ async def cmd_add_oneline(
     await state.set_state(Add_oneline.waiting_for_lab)
 
     keyboard = cancel_keyboard()
-    await message.answer("Please, send one line date", reply_markup=keyboard)
+    await message.answer("Which lab?", reply_markup=keyboard)
 
 
 @router.message(Add_oneline.waiting_for_lab)
@@ -127,7 +127,9 @@ async def input_lab_one_line(message: types.Message, state: FSMContext) -> None:
 
     await state.set_state(Add_oneline.waiting_for_date)
     keyboard = cancel_keyboard()
-    await message.answer("Which date?", reply_markup=keyboard)
+    await message.answer(
+        "Please, send one line date. Which date?", reply_markup=keyboard
+    )
 
 
 @router.message(Add_oneline.waiting_for_date)
@@ -135,12 +137,13 @@ async def on_input_one_line_text(message: types.Message, state: FSMContext):
     date = await parse_date(message)
     if date is None:
         return
+    print(date)
 
     data = await state.get_data()
     input_name = data.get("input_name")
     lab = data.get("lab")
 
-    record = [input_name, date["date"], date["time"], lab, QueueStatus.ACTIVE.value]
+    record = [input_name, date["Date"], date["Time"], lab, QueueStatus.ACTIVE.value]
 
     result = await run_sheet_operation(
         message,
@@ -351,7 +354,7 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
 async def show_status_keyboard(
     message: types.Message, action: str, dispatcher: Dispatcher | None = None
 ):
-    # action: "done", "self_done", "missed", "recover"
+    # action: "done", "self_done", "missed", "no"
     result = await run_sheet_operation(
         message, sheet_service.sort, WorksheetIndex.QUEUE
     )
@@ -375,7 +378,7 @@ async def show_status_keyboard(
         )
         callback_action = action
         status_text = QueueStatus.DONE.value
-    elif action == "done":
+    elif action == "done" or action == "missed":
         records = await run_sheet_operation(
             message,
             sheet_service.get_queue_records,
@@ -384,16 +387,7 @@ async def show_status_keyboard(
         )
         callback_action = action
         status_text = action
-    elif action == "missed":
-        records = await run_sheet_operation(
-            message,
-            sheet_service.get_queue_records,
-            worksheet_index=WorksheetIndex.QUEUE,
-            was=QueueStatus.ACTIVE.value,
-        )
-        callback_action = action
-        status_text = action
-    elif action == "recover":
+    elif action == "no":
         records = await run_sheet_operation(
             message,
             sheet_service.get_queue_records,
@@ -437,52 +431,13 @@ async def cmd_missed(message: types.Message) -> None:
     await show_status_keyboard(message, "missed")
 
 
-@router.message(Command("recover"))
-async def cmd_recover(message: types.Message) -> None:
+@router.message(Command("no"))
+async def cmd_no(message: types.Message) -> None:
     """
     Return a completed or missed record to the active queue.
     Empty rows without a real name/lab are ignored.
     """
-    await show_status_keyboard(message, "recover")
-
-
-@router.message(Command("again"))
-async def cmd_again(message: types.Message, dispatcher: Dispatcher) -> None:
-    input_name = await input_name_from_db(message, dispatcher)
-    if not input_name:
-        return
-
-    result = await run_sheet_operation(
-        message, sheet_service.sort, WorksheetIndex.QUEUE
-    )
-    if result is None:
-        return
-
-    records = await run_sheet_operation(
-        message,
-        sheet_service.get_queue_records,
-        worksheet_index=WorksheetIndex.QUEUE,
-        was=QueueStatus.DONE.value,
-        input_name=input_name,
-    )
-    if records is None:
-        return
-    if not records:
-        await message.answer(
-            "You do not have any completed records to return to the queue."
-        )
-        return
-
-    keyboard = records_keyboard(
-        records,
-        QueueStatus.ACTIVE.value,
-        message.from_user.id,
-        refresh_action="again",
-    )
-    await message.answer(
-        "Choose a completed record to move it back to the active queue:",
-        reply_markup=keyboard,
-    )
+    await show_status_keyboard(message, "no")
 
 
 @router.message(Command("sheet"))
@@ -499,8 +454,8 @@ async def cmd_sheet(message: types.Message) -> None:
     )
 
 
-@router.message(Command("rebirth"))
-async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
+@router.message(Command("self_no"))
+async def cmd_self_no(message: types.Message, dispatcher: Dispatcher) -> None:
     """
     return your self record status in "Was?" to "no"
     """
@@ -534,7 +489,7 @@ async def cmd_rebirth(message: types.Message, dispatcher: Dispatcher) -> None:
         records,
         QueueStatus.ACTIVE.value,
         message.from_user.id,
-        refresh_action="rebirth",
+        refresh_action="self_no",
     )
     await message.answer(
         "Choose a record to reset it back to active status:",
