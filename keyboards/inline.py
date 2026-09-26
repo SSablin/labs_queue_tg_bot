@@ -320,7 +320,7 @@ async def quick_record_action_callback(
         await callback.answer("You cannot do that.", show_alert=True)
         return
 
-    input_name = await input_name_from_db(callback.message, dispatcher)
+    input_name = await input_name_from_db(callback.message.from_user, dispatcher)
     if not input_name:
         return
 
@@ -522,7 +522,9 @@ async def refresh_records_callback(
         await asyncio.to_thread(sheet_service.sort, WorksheetIndex.QUEUE)
         input_name = None
         if view in {"remove", "self_done", "again", "self_no"}:
-            input_name = await input_name_from_db(callback.message, dispatcher)
+            input_name = await input_name_from_db(
+                callback.message.from_user, dispatcher
+            )
             if not input_name:
                 return
 

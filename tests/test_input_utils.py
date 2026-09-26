@@ -108,7 +108,14 @@ async def test_input_name_get_user_exception(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_parse_date_valid():
-    msg = DummyMessage(text="September 6, 2026 at 12:11:41 PM GMT+3")
+async def test_parse_date_gitlab_format():
+    msg = DummyMessage(text="September 25, 2026 at 10:18:15 PM")
     res = await parse_date(msg)
-    assert res == {"date": "06.09.2026", "time": "12:11:41"}
+    assert res == {"Date": "25.09.2026", "Time": "22:18:15"}
+
+
+@pytest.mark.asyncio
+async def test_parse_date_gitlab_format_incomplete():
+    msg = DummyMessage(text="Sep 25, 2026, 10:19 PM")
+    res = await parse_date(msg)
+    assert res == {"Date": "25.09.2026", "Time": "22:19:00"}

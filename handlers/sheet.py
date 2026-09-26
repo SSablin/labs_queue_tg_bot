@@ -137,7 +137,6 @@ async def on_input_one_line_text(message: types.Message, state: FSMContext):
     date = await parse_date(message)
     if date is None:
         return
-    print(date)
 
     data = await state.get_data()
     input_name = data.get("input_name")
@@ -155,7 +154,9 @@ async def on_input_one_line_text(message: types.Message, state: FSMContext):
     if result is None:
         return
 
-    await message.answer(f"New record: {date}")
+    await message.answer(
+        f"New record: date: {date['Date']}, time: {date['Time']}, lab: №{lab}"
+    )
     await state.clear()
 
     result = await run_sheet_operation(

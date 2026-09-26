@@ -61,5 +61,9 @@ async def parse_date(message: types.Message) -> dict[str, str] | None:
     if not input_text:
         await message.answer("Data can not be empty. Try again.")
         return None
+    date = await asyncio.to_thread(parse_str_date, input_text)
+    if not date:
+        await message.answer("Invalid date format. Try again.")
+        return None
 
-    return await asyncio.to_thread(parse_str_date, input_text)
+    return date
