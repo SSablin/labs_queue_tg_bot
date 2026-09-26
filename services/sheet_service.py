@@ -230,14 +230,9 @@ class SheetService:
 _service: Optional[SheetService] = None
 
 
-SHEET_URL: str | None = None
-
-
-def init_service(spreadsheet, sheet_url: str | None = None):
+def init_service(spreadsheet):
     global _service
-    global SHEET_URL
     _service = SheetService(spreadsheet)
-    SHEET_URL = sheet_url
 
 
 def _ensure_service():

@@ -10,7 +10,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from google.oauth2.service_account import Credentials
 
-from config import BOT_TOKEN, CREDITS_PATH, DB_CONFIG, PROXY, SHEET_URL
+from config import Config, load_config
 from database import init_db
 from handlers.sheet import router as sheet_router
 from handlers.start import router as start_router
@@ -18,14 +18,14 @@ from keyboards.inline import router as inline_router
 from services import sheet_service
 
 
-async def _init_db_pool(logger) -> asyncpg.Pool:
+async def _init_db_pool(cfg: Config, logger) -> asyncpg.Pool:
     try:
         pool = await asyncpg.create_pool(
-            user=DB_CONFIG["user"],
-            password=DB_CONFIG["password"],
-            database=DB_CONFIG["database"],
-            host=DB_CONFIG["host"],
-            port=DB_CONFIG.get("port", 5432),
+            user=cfg.db_user,
+            password=cfg.db_password,
+            database=cfg.db_name,
+            host=cfg.db_host,
+            port=cfg.db_port,
             min_size=5,
             max_size=20,
         )
@@ -44,16 +44,16 @@ async def _init_db_pool(logger) -> asyncpg.Pool:
     return pool
 
 
-def _init_sheets(logger) -> None:
+def _init_sheets(cfg: Config, logger) -> None:
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
     try:
-        creds = Credentials.from_service_account_file(CREDITS_PATH, scopes=SCOPES)
+        creds = Credentials.from_service_account_file(cfg.credits_path, scopes=SCOPES)
         client = gspread.authorize(creds)
-        spreadsheet = client.open_by_url(SHEET_URL)
-        sheet_service.init_service(spreadsheet, SHEET_URL)
+        spreadsheet = client.open_by_url(cfg.sheet_url)
+        sheet_service.init_service(spreadsheet)
         logger.info("Google Sheets client initialized")
     except Exception:
         logger.critical("Failed to initialize Google Sheets client", exc_info=True)
@@ -64,12 +64,15 @@ async def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
-    if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN is not set")
+    try:
+        cfg = load_config()
+    except (RuntimeError, ValueError):
+        logger.critical("Invalid configuration", exc_info=True)
+        sys.exit(1)
 
-    session = AiohttpSession(proxy=PROXY)
+    session = AiohttpSession(proxy=cfg.proxy)
     bot = Bot(
-        token=BOT_TOKEN,
+        token=cfg.bot_token,
         session=session,
         default=DefaultBotProperties(parse_mode=None),
     )
@@ -81,13 +84,14 @@ async def main():
 
     # Fail-fast
     try:
-        pool = await _init_db_pool(logger)
-        _init_sheets(logger)
+        pool = await _init_db_pool(cfg, logger)
+        _init_sheets(cfg, logger)
     except Exception:
         await bot.session.close()
         sys.exit(1)
 
     dp["pool"] = pool
+    dp["config"] = cfg
 
     async def on_shutdown():
         await pool.close()

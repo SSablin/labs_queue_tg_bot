@@ -11,6 +11,7 @@ from aiogram.types import (
     RichTextBold,
 )
 
+from config import Config
 from constants.enums import QueueStatus, WorksheetIndex
 from keyboards.inline import cancel_keyboard, own_queue_keyboard, records_keyboard
 from services import sheet_service
@@ -442,12 +443,13 @@ async def cmd_no(message: types.Message) -> None:
 
 
 @router.message(Command("sheet"))
-async def cmd_sheet(message: types.Message) -> None:
-    if not sheet_service.SHEET_URL:
+async def cmd_sheet(message: types.Message, dispatcher: Dispatcher) -> None:
+    cfg: Config = dispatcher["config"]
+    if not cfg.sheet_url:
         logger.error("Google Sheet URL is not configured")
         await message.answer("Google Sheet link is unavailable.")
         return
-    text = f'<a href="{sheet_service.SHEET_URL}">google_sheet</a>'
+    text = f'<a href="{cfg.sheet_url}">google_sheet</a>'
     await message.answer(
         text,
         parse_mode="HTML",
