@@ -135,6 +135,7 @@ async def user_id_callback_handler(
 
 
 @router.callback_query(F.data.startswith("remove:"))
+@router.callback_query(F.data.startswith("self_remove:"))
 async def remove_callback(
     callback: types.CallbackQuery, dispatcher: Dispatcher
 ) -> None:
@@ -161,11 +162,21 @@ async def remove_callback(
         await callback.answer("Invalid button data.", show_alert=True)
         return
 
+    if action == "self_remove":
+        input_name = await input_name_from_db(
+            callback.message.from_user.id, callback.message, dispatcher
+        )
+        if not input_name:
+            return
+
     try:
         record = await asyncio.to_thread(
             sheet_service.get_record_by_id, WorksheetIndex.QUEUE, record_id
         )
         if not record:
+            await callback.answer("Record not found.", show_alert=True)
+            return
+        if action == "self_remove" and record.get("Name") != input_name:
             await callback.answer("This is not your record.", show_alert=True)
             return
         deleted = await asyncio.to_thread(
@@ -533,18 +544,27 @@ async def refresh_records_callback(
     try:
         await asyncio.to_thread(sheet_service.sort, WorksheetIndex.QUEUE)
         input_name = None
-        if view in {"remove", "self_done", "again", "self_no"}:
+        if view in {"self_remove", "self_done", "again", "self_no"}:
             input_name = await input_name_from_db(
-                callback.message.from_user, dispatcher
+                callback.message.from_user.id, callback.message, dispatcher
             )
             if not input_name:
                 return
 
         if view == "remove":
             records = await asyncio.to_thread(
-                sheet_service.find_records, WorksheetIndex.QUEUE, input_name
+                sheet_service.get_queue_records, WorksheetIndex.QUEUE
             )
             action = "remove"
+        elif view == "self_remove":
+            records = await asyncio.to_thread(
+                sheet_service.get_queue_records,
+                WorksheetIndex.QUEUE,
+                None,
+                None,
+                input_name,
+            )
+            action = "self_remove"
         elif view == "done":
             records = await asyncio.to_thread(
                 sheet_service.get_queue_records,

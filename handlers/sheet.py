@@ -309,11 +309,16 @@ async def cheat_input_cheat(message: types.Message, state: FSMContext) -> None:
     await state.clear()
 
 
-@router.message(Command("remove"))
-async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
-    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
-    if not input_name:
-        return
+async def _show_remove_records(
+    message: types.Message,
+    dispatcher: Dispatcher,
+    action: str,
+    input_name: str | None = None,
+) -> None:
+    if action == "self_remove" and not input_name:
+        input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
+        if not input_name:
+            return
 
     result = await run_sheet_operation(
         message, sheet_service.sort, WorksheetIndex.QUEUE
@@ -323,9 +328,9 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
 
     records = await run_sheet_operation(
         message,
-        sheet_service.find_records,
+        sheet_service.get_queue_records,
         worksheet_index=WorksheetIndex.QUEUE,
-        name=input_name,
+        input_name=input_name,
     )
     if records is None:
         return
@@ -334,9 +339,19 @@ async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
         return
 
     keyboard = records_keyboard(
-        records, "remove", message.from_user.id, refresh_action="remove"
+        records, action, message.from_user.id, refresh_action=action
     )
     await message.answer("Choose the record to remove:", reply_markup=keyboard)
+
+
+@router.message(Command("self_remove"))
+async def self_remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
+    await _show_remove_records(message, dispatcher, "self_remove")
+
+
+@router.message(Command("remove"))
+async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
+    await _show_remove_records(message, dispatcher, "remove")
 
 
 async def show_status_keyboard(

@@ -8,6 +8,7 @@ from keyboards.inline import (
     action_callback,
     own_queue_keyboard,
     quick_record_action_callback,
+    remove_callback,
 )
 
 
@@ -270,6 +271,55 @@ async def test_self_done_callback_rejects_foreign_record(monkeypatch):
 
     await action_callback(callback, {})
 
+    assert callback.answers[-1] == (
+        "This is not your record.",
+        {"show_alert": True},
+    )
+
+
+@pytest.mark.asyncio
+async def test_remove_callback_can_delete_foreign_record(monkeypatch):
+    message = DummyMessage(SimpleNamespace(id=42))
+    callback = DummyCallback("remove:record-1:42", message=message)
+    deleted = []
+
+    monkeypatch.setattr(
+        "keyboards.inline.sheet_service.get_record_by_id",
+        lambda worksheet, record_id: {"Name": "Bob"},
+    )
+    monkeypatch.setattr(
+        "keyboards.inline.sheet_service.delete_record_by_id",
+        lambda worksheet, record_id: deleted.append((worksheet, record_id)) or True,
+    )
+
+    await remove_callback(callback, {})
+
+    assert deleted == [(WorksheetIndex.QUEUE, "record-1")]
+    assert message.edited_text[-1][0] == "Record removed."
+
+
+@pytest.mark.asyncio
+async def test_self_remove_callback_rejects_foreign_record(monkeypatch):
+    message = DummyMessage(SimpleNamespace(id=42))
+    callback = DummyCallback("self_remove:record-1:42", message=message)
+    deleted = []
+
+    async def fake_input_name_from_db(user_id, message, dispatcher):
+        return "Alice"
+
+    monkeypatch.setattr("keyboards.inline.input_name_from_db", fake_input_name_from_db)
+    monkeypatch.setattr(
+        "keyboards.inline.sheet_service.get_record_by_id",
+        lambda worksheet, record_id: {"Name": "Bob"},
+    )
+    monkeypatch.setattr(
+        "keyboards.inline.sheet_service.delete_record_by_id",
+        lambda worksheet, record_id: deleted.append((worksheet, record_id)) or True,
+    )
+
+    await remove_callback(callback, {})
+
+    assert deleted == []
     assert callback.answers[-1] == (
         "This is not your record.",
         {"show_alert": True},
