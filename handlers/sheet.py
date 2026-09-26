@@ -13,7 +13,7 @@ from aiogram.types import (
 
 from config import Config
 from constants.enums import QueueStatus, WorksheetIndex
-from keyboards.inline import cancel_keyboard, own_queue_keyboard, records_keyboard
+from keyboards.inline import cancel_keyboard, records_keyboard
 from services import sheet_service
 from states.sheet import Add, Add_oneline, Cheat
 from utils.input import input_name_from_db, parse_date, parse_lab
@@ -80,20 +80,6 @@ async def cmd_queue(message: types.Message, dispatcher: Dispatcher) -> None:
             ]
         ]
     )
-
-    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
-    if input_name and message.from_user:
-        own_records = await run_sheet_operation(
-            message,
-            sheet_service.get_queue_records,
-            worksheet_index=WorksheetIndex.QUEUE,
-            was=QueueStatus.ACTIVE.value,
-            input_name=input_name,
-        )
-        if own_records:
-            keyboard.inline_keyboard.extend(
-                own_queue_keyboard(own_records, message.from_user.id).inline_keyboard
-            )
 
     await message.answer_rich(rich_message=rich_message, reply_markup=keyboard)
 
