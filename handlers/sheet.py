@@ -80,7 +80,7 @@ async def cmd_queue(message: types.Message, dispatcher: Dispatcher) -> None:
         ]
     )
 
-    input_name = await input_name_from_db(message, dispatcher)
+    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
     if input_name and message.from_user:
         own_records = await run_sheet_operation(
             message,
@@ -101,7 +101,7 @@ async def cmd_queue(message: types.Message, dispatcher: Dispatcher) -> None:
 async def cmd_add_oneline(
     message: types.Message, dispatcher: Dispatcher, state: FSMContext
 ):
-    input_name = await input_name_from_db(message, dispatcher)
+    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
     if not input_name:
         return
 
@@ -172,7 +172,7 @@ async def cmd_add(
 ) -> None:
     # TODO: add gitlab format input, add button
 
-    input_name = await input_name_from_db(message, dispatcher)
+    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
     if not input_name:
         return
 
@@ -266,7 +266,7 @@ async def input_time(message: types.Message, state: FSMContext) -> None:
 async def add_cheat(
     message: types.Message, dispatcher: Dispatcher, state: FSMContext
 ) -> None:
-    input_name = await input_name_from_db(message, dispatcher)
+    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
     if not input_name:
         return
 
@@ -324,7 +324,7 @@ async def cheat_input_cheat(message: types.Message, state: FSMContext) -> None:
 
 @router.message(Command("remove"))
 async def remove_record(message: types.Message, dispatcher: Dispatcher) -> None:
-    input_name = await input_name_from_db(message, dispatcher)
+    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
     if not input_name:
         return
 
@@ -367,7 +367,7 @@ async def show_status_keyboard(
             logger.error("Dispatcher is required for the done action")
             await message.answer("Unable to load your records.")
             return
-        input_name = await input_name_from_db(message, dispatcher)
+        input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
         if not input_name:
             return
         records = await run_sheet_operation(
@@ -461,7 +461,7 @@ async def cmd_self_no(message: types.Message, dispatcher: Dispatcher) -> None:
     return your self record status in "Was?" to "no"
     """
 
-    input_name = await input_name_from_db(message, dispatcher)
+    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
     if not input_name:
         return
 

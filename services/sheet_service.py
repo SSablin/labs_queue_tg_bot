@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Optional
 
-from constants.enums import QueueColumn
+from constants.enums import QueueColumn, QueueStatus
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class SheetService:
         for i, row in enumerate(data):
             if row.get("Name") == name:
                 if row.get("record_id", ""):
-                    if lab is None or row.get("Lab") == str(lab):
+                    if lab is None or str(row.get("Lab", "")).strip() == str(lab):
                         rows.append(
                             [
                                 str(i + 1),
@@ -128,7 +128,8 @@ class SheetService:
         worksheet = self.spreadsheet.get_worksheet(worksheet_index)
         if not row_number and record_id:
             row_number = self._find_row_number_by_record_id(worksheet, record_id)
-        elif not row_number and not record_id:
+
+        if row_number is None:
             return
 
         worksheet.update(
@@ -188,7 +189,7 @@ class SheetService:
         for i, row in enumerate(data):
             if str(row.get("record_id")) != record_id:
                 continue
-            if row.get("Was?") != "no":
+            if row.get("Was?") != QueueStatus.ACTIVE.value:
                 return "inactive"
             row_number = i + 2
             values = [

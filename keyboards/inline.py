@@ -237,6 +237,16 @@ async def action_callback(
             await callback.message.edit_reply_markup(reply_markup=None)
             return
 
+    if action == "self_done":
+        input_name = await input_name_from_db(
+            callback.from_user.id, callback.message, dispatcher
+        )
+        if not input_name or not record:
+            return
+        if record.get("Name") != input_name:
+            await callback.answer("This is not your record.", show_alert=True)
+            return
+
     update_status = QueueStatus.DONE.value if action == "self_done" else action
 
     if update_status == QueueStatus.DONE.value:

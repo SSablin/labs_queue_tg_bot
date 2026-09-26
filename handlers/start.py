@@ -23,7 +23,7 @@ async def cmd_start(
         await message.answer("Failed to get user_id")
         return
 
-    input_name = await input_name_from_db(message, dispatcher)
+    input_name = await input_name_from_db(message.from_user.id, message, dispatcher)
     if input_name:
         keyboard = user_db_keyboard(message.from_user.id)
         await message.answer(f"Hello, {input_name}!", reply_markup=keyboard)

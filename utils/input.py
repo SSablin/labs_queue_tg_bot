@@ -10,31 +10,21 @@ logger = logging.getLogger(__name__)
 
 
 async def input_name_from_db(
-    message: types.Message, dispatcher: Dispatcher
+    user_id: int,
+    message: types.Message,
+    dispatcher: Dispatcher,
 ) -> str | None:
     pool = dispatcher.get("pool")
     if not pool:
-        logger.exception("DB error: dispatcher has no 'pool' configured")
+        logger.error("DB error: dispatcher has no 'pool' configured")
         await message.answer("Error: no connection to DB")
         return None
-
-    if not message.from_user:
-        await message.answer("Failed to get user_id")
-        return None
-
     try:
-        input_name = await get_user(
-            pool,
-            message.from_user.id,
-        )
+        return await get_user(pool, user_id)
     except Exception:
-        logger.exception(
-            "DB error while fetching user %s", getattr(message.from_user, "id", None)
-        )
+        logger.exception("DB error while fetching user %s", user_id)
         await message.answer("Connection error")
         return None
-
-    return input_name
 
 
 async def parse_lab(message: types.Message) -> int | None:
@@ -47,7 +37,7 @@ async def parse_lab(message: types.Message) -> int | None:
         lab = int(input_lab)
     except ValueError:
         await message.answer("Lab must be integer. Try again.")
-        return
+        return None
 
     if lab <= 0:
         await message.answer("Lab must be a positive integer. Try again.")

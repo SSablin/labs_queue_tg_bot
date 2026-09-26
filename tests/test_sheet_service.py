@@ -16,7 +16,7 @@ class FakeWorksheet:
     def append_row(self, row, value_input_option):
         self.appended.append((row, value_input_option))
 
-    def update(self, values, range_name):
+    def update(self, values, range_name, value_input_option=None):
         self.updated.append((values, range_name))
 
     def update_cell(self, row, column, value):
@@ -85,9 +85,7 @@ def test_complete_record_updates_entire_row_in_one_operation():
 
 
 def test_complete_record_does_not_overwrite_inactive_record():
-    worksheet = FakeWorksheet(
-        [{"record_id": "record-1", "Was?": "done"}]
-    )
+    worksheet = FakeWorksheet([{"record_id": "record-1", "Was?": "done"}])
     service = SheetService(FakeSpreadsheet(worksheet))
 
     result = service.complete_record_by_id(
