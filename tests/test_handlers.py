@@ -37,7 +37,7 @@ class DummyState:
 @pytest.mark.asyncio
 async def test_cmd_start_existing_user(monkeypatch):
     # Make input_name_from_db return a name
-    async def fake_input_name_from_db(msg, dispatcher):
+    async def fake_input_name_from_db(user_id, msg, dispatcher):
         return "Alice"
 
     # Patch the symbol used by handlers.start (it imports input_name_from_db at module import)
@@ -65,7 +65,9 @@ async def test_input_name_creates_user_and_replies(monkeypatch):
     # Patch the upsert_user symbol used by the handler (imported into handlers.start module)
     monkeypatch.setattr("handlers.start.upsert_user", fake_upsert_user)
 
-    msg = DummyMessage(text="MyName", from_user=SimpleNamespace(id=42, username="u", full_name="F"))
+    msg = DummyMessage(
+        text="MyName", from_user=SimpleNamespace(id=42, username="u", full_name="F")
+    )
 
     class Disp(dict):
         pass
@@ -77,7 +79,10 @@ async def test_input_name_creates_user_and_replies(monkeypatch):
     await input_name(msg, state, dispatcher)
 
     assert msg.answers, "Expected a reply after saving name"
-    assert any("Your name in table is" in a["text"] or "Name updated successfully" in a["text"] for a in msg.answers)
+    assert any(
+        "Your name in table is" in a["text"] or "Name updated successfully" in a["text"]
+        for a in msg.answers
+    )
 
 
 def test_get_current_sheet_datetime(monkeypatch):
@@ -93,4 +98,4 @@ def test_get_current_sheet_datetime(monkeypatch):
     current_date, current_time = inline_keyboards.get_current_sheet_datetime()
 
     assert current_date == "02.01.2024"
-    assert current_time == "03:04"
+    assert current_time == "03:04:05"

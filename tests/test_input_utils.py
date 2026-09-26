@@ -58,7 +58,7 @@ async def test_input_name_no_pool():
     dispatcher = {}
     msg = DummyMessage(text="hello", from_user=SimpleNamespace(id=1))
 
-    res = await input_name_from_db(msg, dispatcher)
+    res = await input_name_from_db(msg.from_user.id, msg, dispatcher)
     assert res is None
     assert msg.answers
     assert "no connection to DB" in msg.answers[-1]
@@ -69,10 +69,10 @@ async def test_input_name_no_from_user():
     dispatcher = {"pool": object()}
     msg = DummyMessage(text="hello", from_user=None)
 
-    res = await input_name_from_db(msg, dispatcher)
+    res = await input_name_from_db(None, msg, dispatcher)
     assert res is None
     assert msg.answers
-    assert "Failed to get user_id" in msg.answers[-1]
+    assert "Connection error" in msg.answers[-1]
 
 
 @pytest.mark.asyncio
@@ -86,7 +86,7 @@ async def test_input_name_get_user_success(monkeypatch):
 
     monkeypatch.setattr("utils.input.get_user", fake_get_user)
 
-    res = await input_name_from_db(msg, dispatcher)
+    res = await input_name_from_db(msg.from_user.id, msg, dispatcher)
     assert res == "Alice"
     assert not msg.answers
 
@@ -101,7 +101,7 @@ async def test_input_name_get_user_exception(monkeypatch):
 
     monkeypatch.setattr("utils.input.get_user", fake_get_user)
 
-    res = await input_name_from_db(msg, dispatcher)
+    res = await input_name_from_db(msg.from_user.id, msg, dispatcher)
     assert res is None
     assert msg.answers
     assert "Connection error" in msg.answers[-1]

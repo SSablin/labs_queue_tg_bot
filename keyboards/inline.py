@@ -194,7 +194,7 @@ async def remove_callback(
 async def action_callback(
     callback: types.CallbackQuery, dispatcher: Dispatcher
 ) -> None:
-    if not isinstance(callback.message, types.Message):
+    if not callback.message:
         logger.error("No callback message")
         return
 
@@ -330,7 +330,9 @@ async def quick_record_action_callback(
         await callback.answer("You cannot do that.", show_alert=True)
         return
 
-    input_name = await input_name_from_db(callback.message.from_user, dispatcher)
+    input_name = await input_name_from_db(
+        callback.message.from_user.id, callback.message, dispatcher
+    )
     if not input_name:
         return
 

@@ -62,7 +62,7 @@ async def test_quick_done_updates_owner_record_status_and_time(monkeypatch):
     dispatcher = {}
     updates = []
 
-    async def fake_input_name_from_db(message, dispatcher):
+    async def fake_input_name_from_db(user_id, message, dispatcher):
         return "Alice"
 
     def fake_get_record_by_id(worksheet_index, record_id):
@@ -77,9 +77,7 @@ async def test_quick_done_updates_owner_record_status_and_time(monkeypatch):
         updates.append((worksheet_index, record_id, column, value))
         return True
 
-    monkeypatch.setattr(
-        "keyboards.inline.input_name_from_db", fake_input_name_from_db
-    )
+    monkeypatch.setattr("keyboards.inline.input_name_from_db", fake_input_name_from_db)
     monkeypatch.setattr(
         "keyboards.inline.get_current_sheet_datetime",
         lambda: ("19.09.2026", "21:47"),
@@ -90,10 +88,9 @@ async def test_quick_done_updates_owner_record_status_and_time(monkeypatch):
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.complete_record_by_id",
-        lambda worksheet, record_id, date, time: updates.append(
-            (worksheet, record_id, date, time)
-        )
-        or "updated",
+        lambda worksheet, record_id, date, time: (
+            updates.append((worksheet, record_id, date, time)) or "updated"
+        ),
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.update_cell_by_id",
@@ -113,22 +110,19 @@ async def test_quick_time_does_not_update_foreign_record(monkeypatch):
     callback = DummyCallback("quick_time:record-1:42", message=message)
     updates = []
 
-    async def fake_input_name_from_db(message, dispatcher):
+    async def fake_input_name_from_db(user_id, message, dispatcher):
         return "Alice"
 
-    monkeypatch.setattr(
-        "keyboards.inline.input_name_from_db", fake_input_name_from_db
-    )
+    monkeypatch.setattr("keyboards.inline.input_name_from_db", fake_input_name_from_db)
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.get_record_by_id",
         lambda worksheet_index, record_id: {"Name": "Bob"},
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.complete_record_by_id",
-        lambda worksheet, record_id, date, time: updates.append(
-            (worksheet, record_id, date, time)
-        )
-        or "updated",
+        lambda worksheet, record_id, date, time: (
+            updates.append((worksheet, record_id, date, time)) or "updated"
+        ),
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.update_cell_by_id",
@@ -159,7 +153,9 @@ async def test_done_command_loads_all_active_records(monkeypatch):
 
     await show_status_keyboard(message, "done", {})
 
-    get_records_call = next(call for call in calls if call[0].__name__ == "get_queue_records")
+    get_records_call = next(
+        call for call in calls if call[0].__name__ == "get_queue_records"
+    )
     assert get_records_call[2]["was"] == QueueStatus.ACTIVE.value
     assert "input_name" not in get_records_call[2]
     assert "Choose the record to make done:" == message.answers[-1][0]
@@ -170,7 +166,7 @@ async def test_self_done_command_loads_only_current_user_records(monkeypatch):
     message = DummyMessage(SimpleNamespace(id=42))
     calls = []
 
-    async def fake_input_name_from_db(message, dispatcher):
+    async def fake_input_name_from_db(user_id, message, dispatcher):
         return "Alice"
 
     async def fake_run_sheet_operation(message, func, *args, **kwargs):
@@ -184,7 +180,9 @@ async def test_self_done_command_loads_only_current_user_records(monkeypatch):
 
     await show_status_keyboard(message, "self_done", {})
 
-    get_records_call = next(call for call in calls if call[0].__name__ == "get_queue_records")
+    get_records_call = next(
+        call for call in calls if call[0].__name__ == "get_queue_records"
+    )
     assert get_records_call[2]["was"] == QueueStatus.ACTIVE.value
     assert get_records_call[2]["input_name"] == "Alice"
     assert message.answers[-1][0] == "Choose the record to make done:"
@@ -202,17 +200,15 @@ async def test_done_callback_can_update_foreign_record(monkeypatch):
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.update_cell_by_id",
-        lambda worksheet, record_id, column, value: updates.append(
-            (worksheet, record_id, column, value)
-        )
-        or True,
+        lambda worksheet, record_id, column, value: (
+            updates.append((worksheet, record_id, column, value)) or True
+        ),
     )
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.complete_record_by_id",
-        lambda worksheet, record_id, date, time: updates.append(
-            (worksheet, record_id, date, time)
-        )
-        or "updated",
+        lambda worksheet, record_id, date, time: (
+            updates.append((worksheet, record_id, date, time)) or "updated"
+        ),
     )
     monkeypatch.setattr(
         "keyboards.inline.get_current_sheet_datetime",
@@ -260,12 +256,10 @@ async def test_self_done_callback_rejects_foreign_record(monkeypatch):
     message = DummyMessage(SimpleNamespace(id=42))
     callback = DummyCallback("self_done:record-1:42", message=message)
 
-    async def fake_input_name_from_db(message, dispatcher):
+    async def fake_input_name_from_db(user_id, message, dispatcher):
         return "Alice"
 
-    monkeypatch.setattr(
-        "keyboards.inline.input_name_from_db", fake_input_name_from_db
-    )
+    monkeypatch.setattr("keyboards.inline.input_name_from_db", fake_input_name_from_db)
     monkeypatch.setattr(
         "keyboards.inline.sheet_service.get_record_by_id",
         lambda worksheet, record_id: {
